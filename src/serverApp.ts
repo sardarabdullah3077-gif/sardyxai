@@ -10,7 +10,13 @@ import * as dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import chatRouter from "./api/chat";
 
-dotenv.config();
+// Load environment variables from .env.local or .env
+const envPath = path.resolve(process.cwd(), process.env.NODE_ENV === 'production' ? '.env' : '.env.local');
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 console.log("[SARDYX Environment Debug] SUPABASE_URL length:", (process.env.SUPABASE_URL || "").length, "Is configured:", !!process.env.SUPABASE_URL);
 
@@ -163,90 +169,100 @@ app.get(["/api/config/supabase", "/config/supabase"], (req, res) => {
 
 // Direct Local Register Endpoint (for offline sandbox fallback)
 app.post(["/api/auth/local-signup", "/auth/local-signup"], (req, res) => {
-  const { email, password, fullName } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required credentials." });
-  }
-  
-  const emailLower = email.toLowerCase().trim();
-  const db = getDB();
-  
-  if (db.users[emailLower]) {
-    return res.status(400).json({ error: "An account with this email address already exists. Please sign in instead." });
-  }
+  try {
+    const { email, password, fullName } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required credentials." });
+    }
+    
+    const emailLower = email.toLowerCase().trim();
+    const db = getDB();
+    
+    if (db.users[emailLower]) {
+      return res.status(400).json({ error: "An account with this email address already exists. Please sign in instead." });
+    }
 
-  const userId = `usr-local-${Date.now()}`;
-  const name = fullName || emailLower.split("@")[0];
-  const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`;
+    const userId = `usr-local-${Date.now()}`;
+    const name = fullName || emailLower.split("@")[0];
+    const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`;
 
-  const newUser = {
-    id: userId,
-    email: emailLower,
-    name,
-    role: "user",
-    createdAt: new Date().toISOString(),
-    avatarUrl,
-    password, // Store as local sandbox credentials
-  };
-
-  db.users[emailLower] = newUser;
-  saveDB(db);
-
-  addAuditLog("auth", `Local sandbox account registered: ${emailLower}`, emailLower, getClientIp(req));
-
-  res.json({
-    user: {
+    const newUser = {
       id: userId,
       email: emailLower,
       name,
       role: "user",
-      createdAt: newUser.createdAt,
+      createdAt: new Date().toISOString(),
       avatarUrl,
-    },
-    token: emailLower,
-  });
+      password, // Store as local sandbox credentials
+    };
+
+    db.users[emailLower] = newUser;
+    saveDB(db);
+
+    addAuditLog("auth", `Local sandbox account registered: ${emailLower}`, emailLower, getClientIp(req));
+
+    res.json({
+      user: {
+        id: userId,
+        email: emailLower,
+        name,
+        role: "user",
+        createdAt: newUser.createdAt,
+        avatarUrl,
+      },
+      token: emailLower,
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Local signup error:", err);
+    res.status(500).json({ error: "Signup failed", message: err.message || "Failed to create account" });
+  }
 });
 
 // Direct Local Login Endpoint (for offline sandbox fallback)
 app.post(["/api/auth/local-login", "/auth/local-login"], (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required credentials." });
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required credentials." });
+    }
+
+    const emailLower = email.toLowerCase().trim();
+    const db = getDB();
+    const user = db.users[emailLower];
+
+    if (!user) {
+      return res.status(400).json({ error: "Account not found or password mismatched in local database." });
+    }
+
+    // Handle password matching if password exists or prompt sync
+    if (user.password && user.password !== password) {
+      return res.status(400).json({ error: "Incorrect password for this user context." });
+    }
+
+    // Set password if logging into prefilled template admin accounts
+    if (!user.password) {
+      user.password = password;
+      db.users[emailLower] = user;
+      saveDB(db);
+    }
+
+    addAuditLog("auth", `Local sandbox account authenticated: ${emailLower}`, emailLower, getClientIp(req));
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+        avatarUrl: user.avatarUrl,
+      },
+      token: emailLower,
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Local login error:", err);
+    res.status(500).json({ error: "Login failed", message: err.message || "Failed to authenticate" });
   }
-
-  const emailLower = email.toLowerCase().trim();
-  const db = getDB();
-  const user = db.users[emailLower];
-
-  if (!user) {
-    return res.status(400).json({ error: "Account not found or password mismatched in local database." });
-  }
-
-  // Handle password matching if password exists or prompt sync
-  if (user.password && user.password !== password) {
-    return res.status(400).json({ error: "Incorrect password for this user context." });
-  }
-
-  // Set password if logging into prefilled template admin accounts
-  if (!user.password) {
-    user.password = password;
-    db.users[emailLower] = user;
-    saveDB(db);
-  }
-
-  addAuditLog("auth", `Local sandbox account authenticated: ${emailLower}`, emailLower, getClientIp(req));
-
-  res.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      createdAt: user.createdAt,
-      avatarUrl: user.avatarUrl,
-    },
-    token: emailLower,
-  });
 });
 
 // Generate direct Google OAuth URL from Supabase
@@ -450,36 +466,41 @@ app.get(["/api/auth/session", "/auth/session"], (req, res) => {
 
 // Synced login route to record dynamic profiles generated from Google OAuth metadata
 app.post(["/api/auth/login", "/auth/login"], (req, res) => {
-  const { email, name, avatarUrl, id } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: "Email is required." });
+  try {
+    const { email, name, avatarUrl, id } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email is required." });
+    }
+
+    const db = getDB();
+    let user = db.users[email];
+
+    if (!user) {
+      user = {
+        id: id || `usr-${Date.now()}`,
+        email,
+        name: name || email.split("@")[0],
+        role: "user",
+        createdAt: new Date().toISOString(),
+        avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
+      };
+      db.users[email] = user;
+      saveDB(db);
+      addAuditLog("auth", `Profile initialized via Google OAuth syncing: ${email}`, email, getClientIp(req));
+    } else {
+      if (name) user.name = name;
+      if (avatarUrl) user.avatarUrl = avatarUrl;
+      if (id) user.id = id;
+      db.users[email] = user;
+      saveDB(db);
+      addAuditLog("auth", `Profile updated and logged in: ${email}`, email, getClientIp(req));
+    }
+
+    res.json({ user, token: email });
+  } catch (err: any) {
+    console.error("[AUTH] Login profile sync error:", err);
+    res.status(500).json({ error: "Login sync failed", message: err.message || "Failed to sync profile" });
   }
-
-  const db = getDB();
-  let user = db.users[email];
-
-  if (!user) {
-    user = {
-      id: id || `usr-${Date.now()}`,
-      email,
-      name: name || email.split("@")[0],
-      role: "user",
-      createdAt: new Date().toISOString(),
-      avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
-    };
-    db.users[email] = user;
-    saveDB(db);
-    addAuditLog("auth", `Profile initialized via Google OAuth syncing: ${email}`, email, getClientIp(req));
-  } else {
-    if (name) user.name = name;
-    if (avatarUrl) user.avatarUrl = avatarUrl;
-    if (id) user.id = id;
-    db.users[email] = user;
-    saveDB(db);
-    addAuditLog("auth", `Profile updated and logged in: ${email}`, email, getClientIp(req));
-  }
-
-  res.json({ user, token: email });
 });
 
 // Clear token endpoint

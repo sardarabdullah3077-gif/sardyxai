@@ -25,11 +25,6 @@
 
 /* Premium Markdown Styling for AI Responses */
 @layer components {
-  /* Markdown prose improvements for premium responses */
-  .prose-premium {
-    @apply prose prose-invert prose-sm max-w-none;
-  }
-
   /* Headings: Professional, premium styling */
   .prose-premium h1 {
     @apply text-2xl font-semibold text-white mt-6 mb-4 leading-tight;
@@ -50,27 +45,19 @@
 
   /* Lists: Better spacing and alignment */
   .prose-premium ul {
-    @apply list-none pl-0 space-y-2.5 my-4;
+    @apply list-disc pl-6 space-y-2.5 my-4;
   }
 
   .prose-premium ul li {
-    @apply flex items-start gap-3 text-zinc-200 font-light;
-  }
-
-  .prose-premium ul li::before {
-    @apply content-['•'] text-indigo-400 font-bold shrink-0 mt-0.5;
+    @apply text-zinc-200 font-light;
   }
 
   .prose-premium ol {
-    @apply list-none pl-0 space-y-2.5 my-4;
+    @apply list-decimal pl-5 space-y-2.5 my-4;
   }
 
   .prose-premium ol li {
-    @apply flex items-start gap-3 text-zinc-200 font-light;
-  }
-
-  .prose-premium ol li::before {
-    @apply content-[counter(item)'.'] counter-increment-item text-indigo-400 font-semibold min-w-6 shrink-0;
+    @apply text-zinc-200 font-light;
   }
 
   /* Horizontal rule: Clean separator */
@@ -120,19 +107,6 @@
     @apply bg-zinc-800/20;
   }
 
-  /* Premium response structure helpers */
-  .response-answer {
-    @apply mb-6;
-  }
-
-  .response-section {
-    @apply mb-6 last:mb-0;
-  }
-
-  .response-divider {
-    @apply my-6 border-white/10;
-  }
-
   /* Mobile optimizations */
   @media (max-width: 640px) {
     .prose-premium h1 {
@@ -155,17 +129,5 @@
     .prose-premium p {
       @apply text-sm mb-3;
     }
-  }
-}
-
-/* Dark mode optimizations (already applied but reinforced) */
-@layer base {
-  /* Ensure dark theme consistency */
-  body {
-    @apply bg-zinc-950 text-zinc-200;
-  }
-
-  code {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
   }
 }

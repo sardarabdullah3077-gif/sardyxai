@@ -22,11 +22,15 @@ export async function getSupabase(): Promise<SupabaseClient> {
       const data = await response.json();
       const { supabaseUrl, supabaseAnonKey } = data;
 
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.warn('Supabase URL or Anon Key is empty in configuration response.');
+      let activeUrl = supabaseUrl;
+      let activeKey = supabaseAnonKey;
+      if (!activeUrl || !activeKey || activeUrl.includes('your-project')) {
+        console.warn('Supabase lies in placeholder state. Please configure real credential keys through Settings tab.');
+        activeUrl = 'https://placeholder.supabase.co';
+        activeKey = 'placeholder';
       }
 
-      supabaseInstance = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder');
+      supabaseInstance = createClient(activeUrl, activeKey);
       return supabaseInstance;
     } catch (err) {
       console.error('Failed to initialize Supabase client:', err);

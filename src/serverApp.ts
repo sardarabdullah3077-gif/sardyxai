@@ -157,14 +157,20 @@ app.get(["/api/config/supabase", "/config/supabase"], (req, res) => {
 // Generate direct Google OAuth URL from Supabase
 app.get(["/api/auth/google-url", "/auth/google-url"], async (req, res) => {
   try {
+    const supabaseUrl = process.env.SUPABASE_URL || "";
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+
+    if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes("your-project") || supabaseUrl === "") {
+      return res.status(400).json({
+        error: "Supabase connection is not fully configured. Please configure your actual SUPABASE_URL and SUPABASE_ANON_KEY in the AI Studio Settings (Secrets/Environment Variables) panel to enable real Google Sign-In, and restart the dev server."
+      });
+    }
+
     const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
     const redirectUri = `${appUrl.replace(/\/$/, "")}/auth/callback`;
 
     const { createClient } = await import("@supabase/supabase-js");
-    const supabase = createClient(
-      process.env.SUPABASE_URL || "",
-      process.env.SUPABASE_ANON_KEY || ""
-    );
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -213,10 +219,9 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
   if (code) {
     try {
       const { createClient } = await import("@supabase/supabase-js");
-      const supabase = createClient(
-        process.env.SUPABASE_URL || "",
-        process.env.SUPABASE_ANON_KEY || ""
-      );
+      const supabaseUrl = process.env.SUPABASE_URL || "https://placeholder.supabase.co";
+      const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "placeholder";
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
       const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
       if (exchangeError) throw exchangeError;

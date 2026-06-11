@@ -285,7 +285,7 @@ export default function LandingPage({ onStartSession, onOpenAuth, isAuthenticate
               <span className="w-3 h-3 rounded-full bg-emerald-500/80"></span>
             </div>
             <div className="px-5 py-1 rounded bg-zinc-900 text-[11px] font-mono text-zinc-400 w-full max-w-sm text-center truncate">
-              sardyx.ai/playground/sardar-abdullah-fazal
+              sardyxai.eu.cc/playground/sardar-abdullah-fazal
             </div>
             <div className="w-8"></div>
           </div>

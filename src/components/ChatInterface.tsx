@@ -169,7 +169,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
 #### Dynamic Handshake Routing Capabilities:
 *   🔑 **Unified AI Routing Key**: Type prompts naturally. The backend detects task intent (coding, reasoning, vision OCR, search grounding, art/video vectors) instantly.
-*   ⚡ **Self-Hosted Integrations**: Powered through custom APIs with a robust central Gemini fallback matrix.
+*   ⚡ **Self-Hosted Integrations**: Powered through custom APIs with robust local sandbox guarantees.
 *   🛡️ **Memory Sync**: Sign in via Google to persistence notes and saved chats across devices.
 
 *Created under directives from **Sardar Abdullah Fazal***`,

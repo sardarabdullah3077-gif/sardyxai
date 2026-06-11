@@ -6,7 +6,6 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { GoogleGenAI } from "@google/genai";
 import * as dotenv from "dotenv";
 import chatRouter from "./api/chat";
 
@@ -17,29 +16,14 @@ const app = express();
 // Set up server-side data paths
 const isVercel = process.env.VERCEL === "1" || !!process.env.VERCEL;
 const DATA_DIR = isVercel ? "/tmp" : path.join(process.cwd(), "db_data");
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.error("Failed to create DATA_DIR under serverApp.ts startup:", err);
 }
 const DB_FILE = path.join(DATA_DIR, "database.json");
-
-// Configure Gemini API Client
-let geminiClient: any = null;
-const initGemini = () => {
-  if (!geminiClient) {
-    const key = process.env.GEMINI_API_KEY;
-    if (key && key !== "MY_GEMINI_API_KEY") {
-      geminiClient = new GoogleGenAI({
-        apiKey: key,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          },
-        },
-      });
-    }
-  }
-  return geminiClient;
-};
 
 // Initialize JSON Database
 interface DBStructure {
@@ -134,7 +118,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Register custom self-hosted LLM proxy route
-app.use("/api/chat", chatRouter);
+app.use(["/api/chat", "/chat"], chatRouter);
 
 // Dynamic IP tracking helper
 const getClientIp = (req: express.Request) => {
@@ -165,7 +149,7 @@ const getAvailableFreeLlmModels = async (baseUrl: string, key: string): Promise<
 // --- AUTHENTICATION ENDPOINTS ---
 
 // Get current active session based on Authorization header
-app.get("/api/auth/session", (req, res) => {
+app.get(["/api/auth/session", "/auth/session"], (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.json({ session: null });
@@ -182,7 +166,7 @@ app.get("/api/auth/session", (req, res) => {
 });
 
 // Login or mock registration
-app.post("/api/auth/login", (req, res) => {
+app.post(["/api/auth/login", "/auth/login"], (req, res) => {
   const { email, name } = req.body;
   if (!email) {
     return res.status(400).json({ error: "Email is required." });
@@ -212,7 +196,7 @@ app.post("/api/auth/login", (req, res) => {
 });
 
 // Clear token endpoint
-app.post("/api/auth/logout", (req, res) => {
+app.post(["/api/auth/logout", "/auth/logout"], (req, res) => {
   const { email } = req.body;
   addAuditLog("auth", `User logged out: ${email || "Anonymous"}`, email, getClientIp(req));
   res.json({ success: true });
@@ -220,7 +204,7 @@ app.post("/api/auth/logout", (req, res) => {
 
 // --- USER PERSISTED MEMORIES ENDPOINTS ---
 
-app.get("/api/memory", (req, res) => {
+app.get(["/api/memory", "/memory"], (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -233,7 +217,7 @@ app.get("/api/memory", (req, res) => {
   res.json(userMemories);
 });
 
-app.post("/api/memory", (req, res) => {
+app.post(["/api/memory", "/memory"], (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -263,7 +247,7 @@ app.post("/api/memory", (req, res) => {
   res.json(newMemory);
 });
 
-app.delete("/api/memory/:id", (req, res) => {
+app.delete(["/api/memory/:id", "/memory/:id"], (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -286,7 +270,7 @@ app.delete("/api/memory/:id", (req, res) => {
 
 // --- CHAT SESSION ENDPOINTS ---
 
-app.get("/api/chats", (req, res) => {
+app.get(["/api/chats", "/chats"], (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     // Return empty array for anonymous guests
@@ -299,7 +283,7 @@ app.get("/api/chats", (req, res) => {
   res.json(userChats);
 });
 
-app.post("/api/chats", (req, res) => {
+app.post(["/api/chats", "/chats"], (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized for chat saving" });
@@ -325,7 +309,7 @@ app.post("/api/chats", (req, res) => {
   res.json(newSession);
 });
 
-app.delete("/api/chats/:id", (req, res) => {
+app.delete(["/api/chats/:id", "/chats/:id"], (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -345,7 +329,7 @@ app.delete("/api/chats/:id", (req, res) => {
   }
 });
 
-app.post("/api/chats/:id", (req, res) => {
+app.post(["/api/chats/:id", "/chats/:id"], (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -371,7 +355,7 @@ app.post("/api/chats/:id", (req, res) => {
 
 /// --- AI MODEL MANAGEMENT ENDPOINTS ---
  
-app.get("/api/models", async (req, res) => {
+app.get(["/api/models", "/models"], async (req, res) => {
   // Returns dynamic models from FreeLLMAPI list or default fallback
   const freeLlmBaseUrl = process.env.FREE_LLM_API_BASE_URL;
   const freeLlmKey = process.env.FREE_LLM_API_KEY;
@@ -483,7 +467,7 @@ app.get("/api/models", async (req, res) => {
 
 // --- SECURITY & ONE FREE MESSAGE PROTECTION ENDPOINT ---
 
-app.post("/api/security/check-guest-limit", (req, res) => {
+app.post(["/api/security/check-guest-limit", "/security/check-guest-limit"], (req, res) => {
   const { guestToken } = req.body;
   const ip = getClientIp(req);
   const db = getDB();
@@ -499,7 +483,7 @@ app.post("/api/security/check-guest-limit", (req, res) => {
 
 // --- CORE AI ROUTER AND CHAT ENGINE ---
 
-app.post("/api/chats/:id/messages", async (req, res) => {
+app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) => {
   const startTime = Date.now();
   const sessionId = req.params.id;
   const { message, guestToken, modelMode } = req.body;
@@ -634,8 +618,8 @@ app.post("/api/chats/:id/messages", async (req, res) => {
       }
     }
   } else {
-    assignedModel = "gemini-3.5-flash";
-    thoughts.push("Dispatching to backup cloud AI endpoint.");
+    assignedModel = "sardyx-sandbox-m1";
+    thoughts.push("Using fast local simulation fallback mode (no keys configuration required).");
   }
 
   // Output required debug logs exactly as requested in Issue 4
@@ -719,61 +703,11 @@ app.post("/api/chats/:id/messages", async (req, res) => {
       }
     }
 
-    // 2. Fallback to AI Studio Gemini Client
-    if (!apiSucceeded) {
-      const gClient = initGemini();
-      if (gClient) {
-        try {
-          thoughts.push(`Re-routing telemetry context via high speed central Gemini nodes...`);
-          
-          let contentsPayload: any = `${message.content}`;
-
-          if (message.attachments && message.attachments.length > 0) {
-            const imageAttach = message.attachments.find((a: any) => a.type.startsWith("image/"));
-            if (imageAttach && imageAttach.base64) {
-              const cleanedBase64 = imageAttach.base64.replace(/^data:image\/\w+;base64,/, "");
-              contentsPayload = {
-                parts: [
-                  { text: message.content },
-                  {
-                    inlineData: {
-                      mimeType: imageAttach.type,
-                      data: cleanedBase64
-                    }
-                  }
-                ]
-              };
-            }
-          }
-
-          const systemPrompt = `You are "SARDYX AI", a beautiful, state-of-the-art production-ready AI agent platform created by Sardar Abdullah Fazal. Your response must look incredibly premium, fully answering the user's request. Maintain an outstanding, confident, highly professional tone and do not break character. Keep creator attribution to Sardar Abdullah Fazal. Reference the user's custom instructions/memories if relevant: ${memoryContext}.`;
-
-          const response = await gClient.models.generateContent({
-            model: "gemini-3.5-flash",
-            contents: contentsPayload,
-            config: {
-              systemInstruction: systemPrompt,
-            },
-          });
-
-          responseText = response.text || "";
-          apiSucceeded = true;
-          db.systemMetrics.geminiCalls++;
-          saveDB(db);
-        } catch (err: any) {
-          console.error("[ERROR]");
-          console.error(`Gemini fallback failed: ${err.message}`);
-          thoughts.push(`Gemini API Core failure: ${err.message}`);
-        }
-      }
-    }
-
     // Gracefully handle unconfigured/failed API keys/endpoints to ensure high-fidelity preview behavior
     if (!responseText) {
-      thoughts.push("Both external LLMs and cloud fallback nodes failed or are currently unconfigured.");
-      thoughts.push("Synthesizing elegant local sandbox response to preserve interface responsiveness...");
+      thoughts.push("Synthesizing elegant local automated response to preserve interface responsiveness...");
       responseText = generatePremiumSimulation(message.content, selectedCategory);
-      responseText += `\n\n---\n\n*💡 **SARDYX Developer Notice:** SARDYX AI is currently running in local offline sandbox mode because your cloud API keys / gateways are unconfigured or offline (FreeLLMAPI base URL: \`${freeLlmBaseUrl || "None"}\`). Custom configurations can be added using the Environment Secrets panel.*`;
+      responseText += `\n\n---\n\n*💡 **SARDYX AI Notice:** SARDYX AI is currently running in local sandbox mode. Configure your backend system keys (such as \`FREE_LLM_API_BASE_URL\` and \`FREE_LLM_API_KEY\`) inside the environment parameters to activate live remote pipelines.*`;
     }
 
     // --- ART & CINEMA SPECIFIC GENERATION (IMAGE & VIDEO ARTIFACTS) ---

@@ -58,7 +58,7 @@ export default function ChatInterface({
   const [selectedModelMode, setSelectedModelMode] = useState<string>('auto');
   const [inputPrompt, setInputPrompt] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(typeof window !== "undefined" && window.innerWidth >= 768);
   const [guestCount, setGuestCount] = useState(0);
   const [isLimitBlocked, setIsLimitBlocked] = useState(false);
   const [copyingMessageId, setCopyingMessageId] = useState<string | null>(null);
@@ -473,7 +473,12 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         
         if (user && result.session) {
           // Sync sessions lists
-          setSessions(sessions.map(s => s.id === result.session.id ? result.session : s));
+          const sessionExists = sessions.some(s => s.id === result.session.id);
+          if (sessionExists) {
+            setSessions(sessions.map(s => s.id === result.session.id ? result.session : s));
+          } else {
+            setSessions([result.session, ...sessions]);
+          }
           setActiveSession(result.session);
         } else {
           // Sync sandbox
@@ -630,11 +635,19 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
   return (
     <div id="playground-interface-root" className="h-screen bg-[#050505] text-zinc-250 font-sans flex overflow-hidden">
       
+      {/* MOBILE BACKDROP OVERLAY */}
+      {isSidebarOpen && (
+        <div 
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-25 md:hidden transition-all duration-300 animate-fade-in"
+        />
+      )}
+
       {/* SIDEBAR NAVIGATION */}
       <aside 
         className={`${
-          isSidebarOpen ? 'w-80' : 'w-0'
-        } transition-all duration-300 md:flex flex-col shrink-0 bg-[#0a0a0a] border-r border-white/5 overflow-hidden relative z-30`}
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        } transition-transform duration-300 fixed md:relative inset-y-0 left-0 w-80 flex flex-col shrink-0 bg-[#0a0a0a] border-r border-white/5 overflow-hidden z-30`}
       >
         <div className="flex flex-col h-full bg-[#0a0a0a] p-4 justify-between">
           <div className="space-y-6">
@@ -1097,7 +1110,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
                 <input
                   type="text"
-                  placeholder={isRecording ? "🎙️ Listening... speak clearly to SARDYX AI" : "Ask SARDYX AI or prompt to generate code, art or videos..."}
+                  placeholder={isRecording ? "🎙️ Listening..." : "Message SARDYX AI..."}
                   value={inputPrompt}
                   onChange={(e) => setInputPrompt(e.target.value)}
                   disabled={loading}

@@ -805,7 +805,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             <select
               value={selectedModelMode}
               onChange={(e: any) => setSelectedModelMode(e.target.value)}
-              className="bg-[#0a0a0a] hover:bg-zinc-900 border border-white/10 focus:border-indigo-500 px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-200 outline-none transition-all cursor-pointer"
+              className="bg-[#0a0a0a] hover:bg-zinc-900 border border-white/10 focus:border-indigo-500 px-2 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-medium text-zinc-200 outline-none transition-all cursor-pointer w-28 sm:w-36 md:w-auto max-w-[180px] truncate"
             >
               <option value="auto">🤖 Auto Router</option>
               {models.map((m) => {

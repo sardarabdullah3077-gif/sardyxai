@@ -56,7 +56,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
         const response = await fetch('/api/auth/local-signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, fullName }),
+          body: JSON.stringify({ email, password, name: fullName }),
         });
 
         let data;

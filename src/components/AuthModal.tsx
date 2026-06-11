@@ -129,7 +129,13 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
             body: JSON.stringify({ email, password, fullName }),
           });
 
-          const data = await response.json();
+          let data;
+          try {
+            data = await response.json();
+          } catch {
+            throw new Error(`Server error: ${response.status} ${response.statusText}`);
+          }
+          
           if (!response.ok) {
             throw new Error(data.error || 'Failed to complete direct local registration.');
           }
@@ -150,7 +156,13 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
             body: JSON.stringify({ email, password }),
           });
 
-          const data = await response.json();
+          let data;
+          try {
+            data = await response.json();
+          } catch {
+            throw new Error(`Server error: ${response.status} ${response.statusText}`);
+          }
+
           if (!response.ok) {
             throw new Error(data.error || 'Failed to complete direct local authentication.');
           }

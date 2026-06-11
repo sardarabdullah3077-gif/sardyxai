@@ -486,12 +486,16 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         // Refresh limits
         checkLimits();
       } else {
-        const errorData = await response.json();
-        if (errorData.error === 'GUEST_LIMIT_REACHED') {
-          setIsLimitBlocked(true);
-          onOpenAuth();
+        try {
+          const errorData = await response.json();
+          if (errorData.error === 'GUEST_LIMIT_REACHED') {
+            setIsLimitBlocked(true);
+            onOpenAuth();
+          }
+          alert(errorData.message || 'Cognitive pipeline ran into structural error state.');
+        } catch (parseErr) {
+          alert(`Server error (${response.status}): ${response.statusText}`);
         }
-        alert(errorData.message || 'Cognitive pipeline ran into structural error state.');
         // Revert prompt text so user doesn't lose it
         setInputPrompt(promptText);
       }

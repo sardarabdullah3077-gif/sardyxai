@@ -118,6 +118,18 @@ async function signIn(email: string, password: string) {
 
 // ── ROUTES ────────────────────────────────────────────────────────────────────
 
+function getJwtRole(token?: string): string {
+  if (!token) return "missing";
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return "invalid";
+    const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+    return payload.role || "unknown";
+  } catch (e: any) {
+    return "error: " + e.message;
+  }
+}
+
 // Health
 app.get(["/health", "/api/health"], (_req, res) => {
   res.json({
@@ -132,6 +144,8 @@ app.get(["/health", "/api/health"], (_req, res) => {
       hasLlmUrl: !!process.env.FREE_LLM_API_BASE_URL,
       hasLlmKey: !!process.env.FREE_LLM_API_KEY,
       nodeEnv: process.env.NODE_ENV,
+      anonKeyRole: getJwtRole(process.env.SUPABASE_ANON_KEY),
+      serviceKeyRole: getJwtRole(process.env.SUPABASE_SERVICE_ROLE_KEY),
     }
   });
 });

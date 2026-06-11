@@ -146,6 +146,7 @@ app.get(["/health", "/api/health"], (_req, res) => {
       nodeEnv: process.env.NODE_ENV,
       anonKeyRole: getJwtRole(process.env.SUPABASE_ANON_KEY),
       serviceKeyRole: getJwtRole(process.env.SUPABASE_SERVICE_ROLE_KEY),
+      clientKeyRole: getJwtRole((sb() as any)?.supabaseKey),
     }
   });
 });

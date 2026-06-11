@@ -60,8 +60,13 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
       // 1. Obtain authorization link from backchannel
       const response = await fetch('/api/auth/google-url');
       if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Backchannel was unable to configure OAuth tunnel.');
+        const text = await response.text().catch(() => '');
+        let errMsg = '';
+        try {
+          const json = JSON.parse(text);
+          errMsg = json.error || json.message;
+        } catch (e) {}
+        throw new Error(errMsg || `HTTP error ${response.status}: ${text.slice(0, 150)}`);
       }
       const { url } = await response.json();
 

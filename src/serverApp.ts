@@ -11,6 +11,8 @@ import chatRouter from "./api/chat";
 
 dotenv.config();
 
+console.log("[SARDYX Environment Debug] SUPABASE_URL length:", (process.env.SUPABASE_URL || "").length, "Is configured:", !!process.env.SUPABASE_URL);
+
 const app = express();
 
 // Set up server-side data paths
@@ -156,11 +158,15 @@ app.get(["/api/config/supabase", "/config/supabase"], (req, res) => {
 
 // Generate direct Google OAuth URL from Supabase
 app.get(["/api/auth/google-url", "/auth/google-url"], async (req, res) => {
+  console.log("[SARDYX Backend Debug] Hit /api/auth/google-url endpoint");
   try {
     const supabaseUrl = process.env.SUPABASE_URL || "";
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
 
+    console.log("[SARDYX Backend Debug] SUPABASE_URL configured:", !!supabaseUrl, "value starts with:", supabaseUrl.slice(0, 15));
+
     if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes("your-project") || supabaseUrl === "") {
+      console.warn("[SARDYX Backend Debug] Supabase client variables are invalid, blocking tunnel.");
       return res.status(400).json({
         error: "Supabase connection is not fully configured. Please configure your actual SUPABASE_URL and SUPABASE_ANON_KEY in the AI Studio Settings (Secrets/Environment Variables) panel to enable real Google Sign-In, and restart the dev server."
       });
@@ -168,6 +174,7 @@ app.get(["/api/auth/google-url", "/auth/google-url"], async (req, res) => {
 
     const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
     const redirectUri = `${appUrl.replace(/\/$/, "")}/auth/callback`;
+    console.log("[SARDYX Backend Debug] Calculated Redirect URI:", redirectUri);
 
     const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -181,9 +188,11 @@ app.get(["/api/auth/google-url", "/auth/google-url"], async (req, res) => {
     });
 
     if (error) {
+      console.error("[SARDYX Backend Debug] signInWithOAuth threw error:", error);
       throw error;
     }
 
+    console.log("[SARDYX Backend Debug] OAuth signInWithOAuth url generated:", data.url);
     res.json({ url: data.url });
   } catch (err: any) {
     console.error("Failed to generate Google OAuth URL:", err.message);

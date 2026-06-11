@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import sardyxLogo from '../assets/images/sardyx_sa_emblem_1781174395689.png';
+import sardyxLogo from '../assets/images/sx_logo.jpg';
 import { 
   Bot, 
   MessageSquare, 

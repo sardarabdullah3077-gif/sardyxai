@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import sardyxLogo from '../assets/images/sardyx_sa_emblem_1781174395689.png';
+import sardyxLogo from '../assets/images/sx_logo.jpg';
 import { 
   Bot, 
   Send, 

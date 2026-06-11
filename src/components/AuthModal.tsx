@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Sparkles, AlertCircle, Loader2, Mail, Lock, User, ArrowRight, CheckCircle2 } from 'lucide-react';
-import sardyxLogo from '../assets/images/sardyx_sa_emblem_1781174395689.png';
+import sardyxLogo from '../assets/images/sx_logo.jpg';
 
 interface AuthModalProps {
   isOpen: boolean;

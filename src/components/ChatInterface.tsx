@@ -26,7 +26,6 @@ import {
   Clock, 
   Settings, 
   ShieldCheck, 
-  HelpCircle, 
   X,
   FileText,
   AlertTriangle,
@@ -35,6 +34,9 @@ import {
   Mic,
   MicOff
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import CodeBlockRenderer from './CodeBlockRenderer';
 import { ChatSession, Message, DynamicModel, UserProfile, Artifact } from '../types';
 
 interface ChatInterfaceProps {
@@ -911,8 +913,23 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   )}
 
                   {/* MAIN Markdowns output renderer with manual styling */}
-                  <div className="whitespace-pre-wrap font-light text-zinc-200 leading-relaxed text-xs sm:text-sm">
-                    {msg.content}
+                  <div className="prose prose-invert prose-sm max-w-none text-zinc-200 font-light leading-relaxed">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code(props) {
+                          const { children, className, node, ...rest } = props;
+                          const inline = !String(children).includes('\n') && !className?.includes('language-');
+                          return (
+                            <CodeBlockRenderer inline={inline} className={className} node={node}>
+                              {children}
+                            </CodeBlockRenderer>
+                          );
+                        }
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
                   </div>
 
                   {/* RENDER MEDIA ARTIFACTS IF COMPLETED FROM BACKEND */}

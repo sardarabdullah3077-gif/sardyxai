@@ -19,9 +19,24 @@ if (fs.existsSync(envPath)) {
 
 const app = express();
 
+// CRITICAL: Body parser middleware MUST be before route handlers
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
 // Health check - always first
 app.get(['/health', '/api/health'], (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), message: 'SARDYX AI Backend is running' });
+});
+
+// Quick test endpoint
+app.post(['/api/test/chat', '/test/chat'], (req, res) => {
+  console.log('[TEST ENDPOINT] POST /api/test/chat called successfully');
+  console.log('[TEST ENDPOINT] Request body:', JSON.stringify(req.body).substring(0, 200));
+  res.json({ 
+    message: 'Test endpoint working!',
+    receivedBody: req.body,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Set up server-side data paths
@@ -122,10 +137,7 @@ const addAuditLog = (type: string, message: string, userEmail?: string, ip?: str
   saveDB(db);
 };
 
-// Express configuration
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
+// Express configuration is at the top of the file with body parsers
 // Register custom self-hosted LLM proxy route
 app.use(["/api/chat", "/chat"], chatRouter);
 

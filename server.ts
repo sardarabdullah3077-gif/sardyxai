@@ -16,8 +16,16 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: "spa",
     });
-    // Mount Vite middlewares
-    app.use(vite.middlewares);
+    
+    // Skip Vite middleware for API routes - handle them before Vite
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
+        // Skip Vite for API routes
+        return next();
+      }
+      // Use Vite for other requests
+      vite.middlewares(req, res, next);
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));

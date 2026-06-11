@@ -1,0 +1,72 @@
+{
+  "users": {
+    "sardarabdullah3077@gmail.com": {
+      "id": "admin-id-1",
+      "email": "sardarabdullah3077@gmail.com",
+      "name": "Sardar Abdullah Fazal",
+      "role": "user",
+      "createdAt": "2026-06-11T15:06:24.744Z",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150&q=80"
+    },
+    "test@example.com": {
+      "id": "usr-local-1781193071441",
+      "email": "test@example.com",
+      "name": "Test User",
+      "role": "user",
+      "createdAt": "2026-06-11T15:51:11.441Z",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=test%40example.com",
+      "password": "test123"
+    },
+    "newuser@example.com": {
+      "id": "usr-local-1781194320463",
+      "email": "newuser@example.com",
+      "name": "New User",
+      "role": "user",
+      "createdAt": "2026-06-11T16:12:00.463Z",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=newuser%40example.com",
+      "password": "password123"
+    }
+  },
+  "sessions": [],
+  "memories": [],
+  "auditLogs": [
+    {
+      "id": "log-1781194327624-2723e",
+      "timestamp": "2026-06-11T16:12:07.624Z",
+      "type": "auth",
+      "message": "Local sandbox account authenticated: newuser@example.com",
+      "userEmail": "newuser@example.com",
+      "ipAddress": "127.0.0.1"
+    },
+    {
+      "id": "log-1781194320464-0jsp1",
+      "timestamp": "2026-06-11T16:12:00.464Z",
+      "type": "auth",
+      "message": "Local sandbox account registered: newuser@example.com",
+      "userEmail": "newuser@example.com",
+      "ipAddress": "127.0.0.1"
+    },
+    {
+      "id": "log-1781193071444-fzrac",
+      "timestamp": "2026-06-11T15:51:11.444Z",
+      "type": "auth",
+      "message": "Local sandbox account registered: test@example.com",
+      "userEmail": "test@example.com",
+      "ipAddress": "127.0.0.1"
+    },
+    {
+      "id": "log-1",
+      "timestamp": "2026-06-11T15:06:24.745Z",
+      "type": "info",
+      "message": "SARDYX AI central core booted successfully by Sardar Abdullah Fazal",
+      "details": "Initial schema initialized."
+    }
+  ],
+  "guestTokens": {},
+  "systemMetrics": {
+    "requestsTotal": 0,
+    "apiLatencyMs": 140,
+    "rateLimitHits": 0,
+    "freeLlmCalls": 0
+  }
+}

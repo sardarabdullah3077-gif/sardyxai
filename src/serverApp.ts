@@ -154,6 +154,7 @@ const getAvailableFreeLlmModels = async (baseUrl: string, key: string): Promise<
 
 // Direct Local Register Endpoint
 app.post(["/api/auth/local-signup", "/auth/local-signup"], (req, res) => {
+  console.log("[AUTH] POST /api/auth/local-signup - Received request");
   try {
     const { email, password, fullName } = req.body;
     if (!email || !password) {

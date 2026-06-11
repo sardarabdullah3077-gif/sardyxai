@@ -140,6 +140,7 @@ app.get(["/health", "/api/health"], (_req, res) => {
     llm: !!(process.env.FREE_LLM_API_BASE_URL && process.env.FREE_LLM_API_KEY),
     env: {
       hasSupabaseUrl: !!process.env.SUPABASE_URL,
+      supabaseUrl: process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).hostname : "none",
       hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       hasLlmUrl: !!process.env.FREE_LLM_API_BASE_URL,
       hasLlmKey: !!process.env.FREE_LLM_API_KEY,

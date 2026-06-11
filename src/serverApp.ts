@@ -7,6 +7,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import * as dotenv from "dotenv";
+import { createClient } from "@supabase/supabase-js";
 import chatRouter from "./api/chat";
 
 dotenv.config();
@@ -176,7 +177,6 @@ app.get(["/api/auth/google-url", "/auth/google-url"], async (req, res) => {
     const redirectUri = `${appUrl.replace(/\/$/, "")}/auth/callback`;
     console.log("[SARDYX Backend Debug] Calculated Redirect URI:", redirectUri);
 
-    const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -195,8 +195,8 @@ app.get(["/api/auth/google-url", "/auth/google-url"], async (req, res) => {
     console.log("[SARDYX Backend Debug] OAuth signInWithOAuth url generated:", data.url);
     res.json({ url: data.url });
   } catch (err: any) {
-    console.error("Failed to generate Google OAuth URL:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("Failed to generate Google OAuth URL:", err.message || err);
+    res.status(500).json({ error: err.message || "Failed to initiate OAuth handshakes on Supabase client side." });
   }
 });
 
@@ -227,7 +227,6 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
 
   if (code) {
     try {
-      const { createClient } = await import("@supabase/supabase-js");
       const supabaseUrl = process.env.SUPABASE_URL || "https://placeholder.supabase.co";
       const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "placeholder";
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -517,9 +516,11 @@ app.delete(["/api/chats/:id", "/chats/:id"], (req, res) => {
   const index = db.sessions.findIndex(s => s.id === id && s.userEmail === email);
 
   if (index !== -1) {
+    const sessionTitle = db.sessions[index].title;
     db.sessions.splice(index, 1);
     saveDB(db);
-    res.json({ success: true });
+    addAuditLog("chat", `Deleted conversation: "${sessionTitle}"`, email, getClientIp(req));
+    res.json({ success: true, message: "Chat successfully deleted." });
   } else {
     res.status(404).json({ error: "Conversation not found" });
   }

@@ -212,15 +212,24 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
   const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (id.startsWith('sess-temp-')) {
-      initFreshSession();
+    if (id.startsWith('sess-temp-') || !user) {
+      // Local clean-up if guest or temporary session
+      const filtered = sessions.filter(s => s.id !== id);
+      setSessions(filtered);
+      if (activeSession?.id === id) {
+        if (filtered.length > 0) {
+          setActiveSession(filtered[0]);
+        } else {
+          initFreshSession();
+        }
+      }
       return;
     }
     try {
       const response = await fetch(`/api/chats/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${user!.email}`
+          'Authorization': `Bearer ${user.email}`
         }
       });
       if (response.ok) {

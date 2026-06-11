@@ -985,11 +985,6 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   {/* Metadata display at footer of bubbles */}
                   <div className="flex items-center gap-3.5 text-[9px] font-mono text-zinc-500 mt-3 pt-2.5 border-t border-white/5 select-none">
                     <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    {msg.modelUsed && (
-                      <span className="px-1.5 rounded bg-zinc-900 text-indigo-400 font-semibold border border-white/5">
-                        {msg.modelUsed}
-                      </span>
-                    )}
                     {msg.durationMs && (
                       <span className="text-zinc-650 block sm:inline">Inference: {msg.durationMs}ms</span>
                     )}

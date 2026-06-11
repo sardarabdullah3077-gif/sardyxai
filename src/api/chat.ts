@@ -15,7 +15,10 @@ router.post("/", async (req: Request, res: Response) => {
   }
 
   // Construct the target URL for OpenAI chat completions standard
-  const sanitizedBase = freeLlmBaseUrl.replace(/\/$/, "");
+  let sanitizedBase = freeLlmBaseUrl.trim().replace(/\/+$/, "");
+  // Fix any trailing /v1r typo
+  if (sanitizedBase.endsWith("/v1r")) sanitizedBase = sanitizedBase.slice(0, -1);
+  // Strip trailing /v1 so we can always append /v1/...
   const normalizedBase = sanitizedBase.endsWith("/v1") ? sanitizedBase.slice(0, -3) : sanitizedBase;
   const targetUrl = `${normalizedBase}/v1/chat/completions`;
   console.log(`[CHAT PROXY] Proxying request to: ${targetUrl}`);

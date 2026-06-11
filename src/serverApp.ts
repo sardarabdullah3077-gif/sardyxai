@@ -1,15 +1,29 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * SARDYX AI — Central Express Application
+ * ========================================
+ * dotenv MUST be configured before any module that reads env vars is imported.
  */
 
-import express from "express";
+// ─── 1. Load env vars FIRST (before any other local import) ────────────────
 import path from "path";
 import fs from "fs";
 import * as dotenv from "dotenv";
+
+const envFile = process.env.NODE_ENV === "production" ? ".env" : ".env.local";
+const envPath = path.resolve(process.cwd(), envFile);
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config(); // fallback: reads .env in cwd
+}
+
+// ─── 2. Now import everything else ─────────────────────────────────────────
+import express from "express";
 import chatRouter from "./api/chat";
 import {
-  supabase,
   getLocalDB,
   saveLocalDB,
   dbSignUp,
@@ -24,36 +38,28 @@ import {
   dbDeleteMemory,
 } from "./lib/supabase";
 
-// Load environment variables from .env.local or .env
-const envPath = path.resolve(process.cwd(), process.env.NODE_ENV === 'production' ? '.env' : '.env.local');
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-} else {
-  dotenv.config();
-}
-
+// ─── 3. Express setup ───────────────────────────────────────────────────────
 const app = express();
 
-// CRITICAL: Body parser middleware MUST be before route handlers
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Health check - always first
-app.get(['/health', '/api/health'], (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), message: 'SARDYX AI Backend is running' });
-});
-
-// Quick test endpoint
-app.post(['/api/test/chat', '/test/chat'], (req, res) => {
-  console.log('[TEST ENDPOINT] POST /api/test/chat called successfully');
-  res.json({ 
-    message: 'Test endpoint working!',
-    receivedBody: req.body,
-    timestamp: new Date().toISOString()
+// ─── Health / test ──────────────────────────────────────────────────────────
+app.get(["/health", "/api/health"], (_req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    message: "SARDYX AI Backend is running",
+    supabase: !!(process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)),
+    llmConfigured: !!(process.env.FREE_LLM_API_BASE_URL && process.env.FREE_LLM_API_KEY),
   });
 });
 
-// Local DB metrics usage helpers
+app.post(["/api/test/chat", "/test/chat"], (req, res) => {
+  res.json({ message: "Test endpoint working!", receivedBody: req.body, timestamp: new Date().toISOString() });
+});
+
+// ─── Local DB helpers ────────────────────────────────────────────────────────
 const getDB = getLocalDB;
 const saveDB = saveLocalDB;
 
@@ -63,402 +69,265 @@ const addAuditLog = (type: string, message: string, userEmail?: string, ip?: str
     db.auditLogs.unshift({
       id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       timestamp: new Date().toISOString(),
-      type,
-      message,
-      userEmail,
+      type, message, userEmail,
       ipAddress: ip || "127.0.0.1",
       details,
     });
-    // Cap logs to 200
-    if (db.auditLogs.length > 200) {
-      db.auditLogs = db.auditLogs.slice(0, 200);
-    }
+    if (db.auditLogs.length > 200) db.auditLogs = db.auditLogs.slice(0, 200);
     saveDB(db);
   } catch (err) {
     console.error("Failed to add audit log:", err);
   }
 };
 
-// Register custom self-hosted LLM proxy route
+// ─── Custom LLM proxy route ──────────────────────────────────────────────────
 app.use(["/api/chat", "/chat"], chatRouter);
 
-// Dynamic IP tracking helper
-const getClientIp = (req: express.Request) => {
-  return (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "127.0.0.1";
-};
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const getClientIp = (req: express.Request) =>
+  (req.headers["x-forwarded-for"] as string) || req.socket?.remoteAddress || "127.0.0.1";
 
-// Helper to fetch list of models dynamically from FreeLLMAPI
+/** Normalise the FreeLLM base URL — handles the /v1r typo and trailing /v1 */
+function normaliseLlmBase(rawUrl: string): string {
+  let url = rawUrl.trim().replace(/\/+$/, ""); // strip trailing slashes
+  // Fix typo: ends with /v1r → /v1
+  if (url.endsWith("/v1r")) url = url.slice(0, -1);
+  // Strip /v1 suffix so we can always append /v1/...
+  if (url.endsWith("/v1")) url = url.slice(0, -3);
+  return url;
+}
+
 const getAvailableFreeLlmModels = async (baseUrl: string, key: string): Promise<string[]> => {
   try {
-    let sanitizedUrl = baseUrl.trim().replace(/\/$/, "");
-    if (sanitizedUrl.endsWith("/v1r")) {
-      sanitizedUrl = sanitizedUrl.slice(0, -1); // remove trailing 'r' typo
-    }
-    const normalizedUrl = sanitizedUrl.endsWith("/v1") ? sanitizedUrl.slice(0, -3) : sanitizedUrl;
-    
-    console.log(`[FREE_LLM_API] Retrieving model list from: ${normalizedUrl}/v1/models`);
-    const res = await fetch(`${normalizedUrl}/v1/models`, {
+    const base = normaliseLlmBase(baseUrl);
+    const modelsUrl = `${base}/v1/models`;
+    console.log(`[LLM] Fetching models from ${modelsUrl}`);
+    const res = await fetch(modelsUrl, {
       method: "GET",
-      headers: { "Authorization": `Bearer ${key}` },
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10_000),
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data.data && Array.isArray(data.data)) {
-        return data.data.map((m: any) => m.id);
-      }
+      if (Array.isArray(data?.data)) return data.data.map((m: any) => m.id as string);
     } else {
-      const errorText = await res.text();
-      console.error(`[FREE_LLM_API] Failed to retrieve model list. Status: ${res.status}, Error: ${errorText}`);
+      console.error(`[LLM] Model list fetch failed: ${res.status} ${await res.text()}`);
     }
   } catch (err: any) {
-    console.error("[FREE_LLM_API] Failed to retrieve model list:", err.message);
+    console.error("[LLM] Model list fetch error:", err.message);
   }
   return [];
 };
 
-// --- AUTHENTICATION ENDPOINTS (SUPABASE / LOCAL FALLBACK) ---
+// ─── AUTH ENDPOINTS ──────────────────────────────────────────────────────────
 
-// Register Endpoint
 app.post(["/api/auth/local-signup", "/auth/local-signup"], async (req, res) => {
-  console.log("[AUTH] POST /api/auth/local-signup - Received request");
+  console.log("[AUTH] POST /api/auth/local-signup");
   try {
     const { email, password, fullName, name } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required credentials." });
-    }
-    
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
     const displayName = name || fullName || email.split("@")[0];
     const user = await dbSignUp(email, password, displayName);
-
-    addAuditLog("auth", `Account registered successfully: ${user.email}`, user.email, getClientIp(req));
-
-    res.json({
-      user,
-      token: user.email,
-    });
+    addAuditLog("auth", `Account registered: ${user.email}`, user.email, getClientIp(req));
+    return res.json({ user, token: user.email });
   } catch (err: any) {
-    console.error("[AUTH] Signup error:", err);
-    res.status(400).json({ error: err.message || "Signup failed" });
+    console.error("[AUTH] Signup error:", err.message);
+    return res.status(400).json({ error: err.message || "Signup failed" });
   }
 });
 
-// Login Endpoint
 app.post(["/api/auth/local-login", "/auth/local-login"], async (req, res) => {
-  console.log("[AUTH] POST /api/auth/local-login - Received request");
+  console.log("[AUTH] POST /api/auth/local-login");
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required credentials." });
-    }
-
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
     const user = await dbSignIn(email, password);
-
-    addAuditLog("auth", `Account authenticated successfully: ${user.email}`, user.email, getClientIp(req));
-
-    res.json({
-      user,
-      token: user.email,
-    });
+    addAuditLog("auth", `Account authenticated: ${user.email}`, user.email, getClientIp(req));
+    return res.json({ user, token: user.email });
   } catch (err: any) {
-    console.error("[AUTH] Login error:", err);
-    res.status(400).json({ error: err.message || "Login failed" });
+    console.error("[AUTH] Login error:", err.message);
+    return res.status(400).json({ error: err.message || "Login failed" });
   }
 });
 
-// Session endpoint
 app.get(["/api/auth/session", "/auth/session"], async (req, res) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.json({ session: null });
-  }
-
+  if (!authHeader?.startsWith("Bearer ")) return res.json({ session: null });
   const email = authHeader.replace("Bearer ", "").trim();
   try {
     const user = await dbGetUserProfile(email);
-    if (user) {
-      return res.json({ session: { user } });
-    }
+    return res.json({ session: user ? { user } : null });
   } catch (err) {
-    console.error("[AUTH] Session sync error:", err);
+    return res.json({ session: null });
   }
-  return res.json({ session: null });
 });
 
-// Synced login route to record dynamic profiles generated from Google OAuth metadata
 app.post(["/api/auth/login", "/auth/login"], async (req, res) => {
   try {
     const { email, name, avatarUrl, id } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: "Email is required." });
-    }
-
+    if (!email) return res.status(400).json({ error: "Email is required." });
     const emailLower = email.toLowerCase().trim();
-    const displayName = name || emailLower.split("@")[0];
-    const avatar = avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`;
-
     const user = {
       id: id || `usr-${Date.now()}`,
       email: emailLower,
-      name: displayName,
+      name: name || emailLower.split("@")[0],
       role: "user",
       createdAt: new Date().toISOString(),
-      avatarUrl: avatar,
+      avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
     };
-
     addAuditLog("auth", `Profile synced: ${emailLower}`, emailLower, getClientIp(req));
-    res.json({ user, token: emailLower });
+    return res.json({ user, token: emailLower });
   } catch (err: any) {
-    console.error("[AUTH] Login profile sync error:", err);
-    res.status(500).json({ error: "Login sync failed", message: err.message || "Failed to sync profile" });
+    return res.status(500).json({ error: "Login sync failed", message: err.message });
   }
 });
 
-// Clear token endpoint
 app.post(["/api/auth/logout", "/auth/logout"], (req, res) => {
   const { email } = req.body;
   addAuditLog("auth", `User logged out: ${email || "Anonymous"}`, email, getClientIp(req));
-  res.json({ success: true });
+  return res.json({ success: true });
 });
 
-// --- USER PERSISTED MEMORIES ENDPOINTS ---
+// ─── MEMORY ENDPOINTS ────────────────────────────────────────────────────────
 
 app.get(["/api/memory", "/memory"], async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  const email = authHeader.replace("Bearer ", "").trim();
+  const email = req.headers.authorization?.replace("Bearer ", "").trim();
+  if (!email) return res.status(401).json({ error: "Unauthorized" });
   try {
-    const userMemories = await dbGetMemories(email);
-    res.json(userMemories);
+    return res.json(await dbGetMemories(email));
   } catch (err: any) {
-    console.error("[MEMORY] Fetch error:", err);
-    res.status(500).json({ error: "Failed to retrieve memories" });
+    console.error("[MEMORY] Fetch error:", err.message);
+    return res.status(500).json({ error: "Failed to retrieve memories" });
   }
 });
 
 app.post(["/api/memory", "/memory"], async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  const email = authHeader.replace("Bearer ", "").trim();
+  const email = req.headers.authorization?.replace("Bearer ", "").trim();
+  if (!email) return res.status(401).json({ error: "Unauthorized" });
   const { key, content } = req.body;
-
-  if (!key || !content) {
-    return res.status(400).json({ error: "Key and content are required" });
-  }
-
-  const memoryId = `mem-${Date.now()}`;
+  if (!key || !content) return res.status(400).json({ error: "Key and content are required" });
   try {
-    const newMemory = await dbCreateMemory(memoryId, email, key, content);
-    addAuditLog("chat", `Created user memory note [${key}]`, email, getClientIp(req));
-    res.json(newMemory);
+    const mem = await dbCreateMemory(`mem-${Date.now()}`, email, key, content);
+    addAuditLog("chat", `Created memory [${key}]`, email, getClientIp(req));
+    return res.json(mem);
   } catch (err: any) {
-    console.error("[MEMORY] Create error:", err);
-    res.status(500).json({ error: "Failed to store memory" });
+    console.error("[MEMORY] Create error:", err.message);
+    return res.status(500).json({ error: "Failed to store memory" });
   }
 });
 
 app.delete(["/api/memory/:id", "/memory/:id"], async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  const email = authHeader.replace("Bearer ", "").trim();
-  const id = req.params.id;
-
+  const email = req.headers.authorization?.replace("Bearer ", "").trim();
+  if (!email) return res.status(401).json({ error: "Unauthorized" });
   try {
-    await dbDeleteMemory(id, email);
-    addAuditLog("chat", `Deleted user memory note`, email, getClientIp(req));
-    res.json({ success: true });
+    await dbDeleteMemory(req.params.id, email);
+    return res.json({ success: true });
   } catch (err: any) {
-    console.error("[MEMORY] Delete error:", err);
-    res.status(500).json({ error: "Failed to delete memory item" });
+    console.error("[MEMORY] Delete error:", err.message);
+    return res.status(500).json({ error: "Failed to delete memory" });
   }
 });
 
-// --- CHAT SESSION ENDPOINTS ---
+// ─── CHAT SESSION ENDPOINTS ──────────────────────────────────────────────────
 
 app.get(["/api/chats", "/chats"], async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.json([]);
-  }
-  const email = authHeader.replace("Bearer ", "").trim();
+  const email = req.headers.authorization?.replace("Bearer ", "").trim();
+  if (!email) return res.json([]);
   try {
-    const userChats = await dbGetSessions(email);
-    res.json(userChats);
+    return res.json(await dbGetSessions(email));
   } catch (err: any) {
-    console.error("[CHATS] Fetch error:", err);
-    res.status(500).json({ error: "Failed to load chats" });
+    console.error("[CHATS] Fetch error:", err.message);
+    return res.status(500).json({ error: "Failed to load chats" });
   }
 });
 
 app.post(["/api/chats", "/chats"], async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: "Unauthorized for chat saving" });
-  }
-  const email = authHeader.replace("Bearer ", "").trim();
+  const email = req.headers.authorization?.replace("Bearer ", "").trim();
+  if (!email) return res.status(401).json({ error: "Unauthorized" });
   const { title, modelMode } = req.body;
-  const sessionId = `sess-${Date.now()}`;
-
   try {
-    const session = await dbCreateSession(sessionId, email, title, modelMode);
-    res.json(session);
+    return res.json(await dbCreateSession(`sess-${Date.now()}`, email, title, modelMode));
   } catch (err: any) {
-    console.error("[CHATS] Creation error:", err);
-    res.status(500).json({ error: "Failed to initialize conversation session" });
+    console.error("[CHATS] Create error:", err.message);
+    return res.status(500).json({ error: "Failed to create chat session" });
   }
 });
 
 app.delete(["/api/chats/:id", "/chats/:id"], async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  const email = authHeader.replace("Bearer ", "").trim();
-  const id = req.params.id;
-
+  const email = req.headers.authorization?.replace("Bearer ", "").trim();
+  if (!email) return res.status(401).json({ error: "Unauthorized" });
   try {
-    await dbDeleteSession(id, email);
-    addAuditLog("chat", `Deleted conversation: "${id}"`, email, getClientIp(req));
-    res.json({ success: true, message: "Chat successfully deleted." });
+    await dbDeleteSession(req.params.id, email);
+    return res.json({ success: true });
   } catch (err: any) {
-    console.error("[CHATS] Deletion error:", err);
-    res.status(500).json({ error: "Failed to delete conversation session" });
+    console.error("[CHATS] Delete error:", err.message);
+    return res.status(500).json({ error: "Failed to delete chat" });
   }
 });
 
 app.post(["/api/chats/:id", "/chats/:id"], async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  const email = authHeader.replace("Bearer ", "").trim();
-  const id = req.params.id;
+  const email = req.headers.authorization?.replace("Bearer ", "").trim();
+  if (!email) return res.status(401).json({ error: "Unauthorized" });
   const { messages } = req.body;
-
   try {
-    const session = await dbUpdateSession(id, email, messages);
-    res.json(session);
+    return res.json(await dbUpdateSession(req.params.id, email, messages));
   } catch (err: any) {
-    console.error("[CHATS] Save error:", err);
-    res.status(500).json({ error: "Failed to preserve chat session messages" });
+    console.error("[CHATS] Update error:", err.message);
+    return res.status(500).json({ error: "Failed to save chat messages" });
   }
 });
 
-// --- AI MODEL MANAGEMENT ENDPOINTS ---
- 
-app.get(["/api/models", "/models"], async (req, res) => {
+// ─── MODELS ENDPOINT ─────────────────────────────────────────────────────────
+
+app.get(["/api/models", "/models"], async (_req, res) => {
   const freeLlmBaseUrl = process.env.FREE_LLM_API_BASE_URL;
   const freeLlmKey = process.env.FREE_LLM_API_KEY;
 
   const defaultModels = [
-    {
-      id: "sardyx-reasoning",
-      name: "SardyX Reason Plus (r1)",
-      category: "Reasoning Models",
-      isAvailable: true,
-      provider: "FreeLLMAPI-Core",
-      description: "Advanced multi-turn deep thinking reasoning for hard STEM, math, and logical operations.",
-      iconName: "brain",
-    },
-    {
-      id: "sardyx-conversation",
-      name: "SardyX Conversational-X",
-      category: "Chat Models",
-      isAvailable: true,
-      provider: "FreeLLMAPI-Core",
-      description: "Blazing fast everyday interactions, summarization, creative brainstorming, and high throughput.",
-      iconName: "message-square",
-    },
-    {
-      id: "sardyx-coder",
-      name: "SardyX CodePro v3",
-      category: "Coding Models",
-      isAvailable: true,
-      provider: "FreeLLMAPI-Coder",
-      description: "Maximum efficiency logic builder trained on 80+ programming languages for debugging and writing systems.",
-      iconName: "code",
-    },
-    {
-      id: "sardyx-vision",
-      name: "SardyX Omni-Vision (Lens)",
-      category: "Vision Models",
-      isAvailable: true,
-      provider: "FreeLLMAPI-Multimodal",
-      description: "Highly trained OCR, structural schema matching, flowchart tracing, and visual analysis model.",
-      iconName: "eye",
-    },
+    { id: "sardyx-reasoning", name: "SardyX Reason Plus (r1)", category: "Reasoning Models", isAvailable: true, provider: "FreeLLMAPI-Core", description: "Advanced multi-turn deep thinking for STEM, math, and logic.", iconName: "brain" },
+    { id: "sardyx-conversation", name: "SardyX Conversational-X", category: "Chat Models", isAvailable: true, provider: "FreeLLMAPI-Core", description: "Blazing fast everyday interactions and brainstorming.", iconName: "message-square" },
+    { id: "sardyx-coder", name: "SardyX CodePro v3", category: "Coding Models", isAvailable: true, provider: "FreeLLMAPI-Coder", description: "Expert at debugging, refactoring and writing clean code.", iconName: "code" },
+    { id: "sardyx-vision", name: "SardyX Omni-Vision", category: "Vision Models", isAvailable: true, provider: "FreeLLMAPI-Multimodal", description: "OCR, image analysis and visual reasoning.", iconName: "eye" },
   ];
 
-  if (freeLlmBaseUrl && freeLlmKey && freeLlmBaseUrl !== "MY_FREE_LLM_API_BASE_URL") {
+  if (freeLlmBaseUrl && freeLlmKey) {
     try {
-      const availableIds = await getAvailableFreeLlmModels(freeLlmBaseUrl, freeLlmKey);
-      if (availableIds && availableIds.length > 0) {
-        const mappedModels = availableIds.map((id) => {
-          const idLower = id.toLowerCase();
-          const isReason = idLower.includes("reason") || idLower.includes("r1") || idLower.includes("think") || idLower.includes("deepseek");
-          const isCode = idLower.includes("code") || idLower.includes("coder");
-          const isVision = idLower.includes("vision") || idLower.includes("vl") || idLower.includes("lens");
-          
-          let category = "Chat Models";
-          let iconName = "message-square";
-          let description = `Dynamic model retrieved via FreeLLMAPI: ${id}`;
-
-          if (isReason) {
-            category = "Reasoning Models";
-            iconName = "brain";
-            description = `Deep thinking reasoning model: ${id}`;
-          } else if (isCode) {
-            category = "Coding Models";
-            iconName = "code";
-            description = `Logic specialist programming and system building model: ${id}`;
-          } else if (isVision) {
-            category = "Vision Models";
-            iconName = "eye";
-            description = `Multi-modal vision and pixel parsing model: ${id}`;
-          }
-
+      const ids = await getAvailableFreeLlmModels(freeLlmBaseUrl, freeLlmKey);
+      if (ids.length > 0) {
+        return res.json(ids.map((id) => {
+          const l = id.toLowerCase();
+          const isReason = l.includes("reason") || l.includes("r1") || l.includes("think") || l.includes("deepseek");
+          const isCode   = l.includes("code") || l.includes("coder");
+          const isVision = l.includes("vision") || l.includes("vl");
           return {
-            id,
-            name: id,
-            category,
+            id, name: id,
+            category: isReason ? "Reasoning Models" : isCode ? "Coding Models" : isVision ? "Vision Models" : "Chat Models",
             isAvailable: true,
             provider: "FreeLLMAPI Host",
-            description,
-            iconName,
+            description: `Free model: ${id}`,
+            iconName: isReason ? "brain" : isCode ? "code" : isVision ? "eye" : "message-square",
           };
-        });
-        return res.json(mappedModels);
+        }));
       }
     } catch (err: any) {
-      console.error("[api/models] Failed to load models from FreeLLMAPI, using default catalog:", err.message);
+      console.error("[MODELS] Error fetching model list:", err.message);
     }
   }
-
-  res.json(defaultModels);
+  return res.json(defaultModels);
 });
 
-// --- SECURITY & ONE FREE MESSAGE PROTECTION ENDPOINT ---
+// ─── GUEST SECURITY ───────────────────────────────────────────────────────────
 
 app.post(["/api/security/check-guest-limit", "/security/check-guest-limit"], (req, res) => {
   const { guestToken } = req.body;
   const ip = getClientIp(req);
   const db = getDB();
-  
   const tokenKey = guestToken || ip;
   const count = db.guestTokens[tokenKey] || 0;
-
-  res.json({
-    allowed: count < 1,
-    currentCount: count,
-  });
+  return res.json({ allowed: count < 1, currentCount: count });
 });
 
-// --- CORE AI ROUTER AND CHAT ENGINE ---
+// ─── CORE CHAT / AI INFERENCE ENDPOINT ───────────────────────────────────────
 
 app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) => {
   const startTime = Date.now();
@@ -466,8 +335,7 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
   const { message, guestToken, modelMode, customInstructions } = req.body;
   const authHeader = req.headers.authorization;
   const ip = getClientIp(req);
-  
-  // Guard validation
+
   if (!message || typeof message.content !== "string" || !message.content.trim()) {
     return res.status(400).json({ error: "Message content is required" });
   }
@@ -475,419 +343,233 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
   const userEmail = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
   const db = getDB();
 
-  // Guest checking logic
+  // ── Guest rate limiting ──────────────────────────────────────────────────
   if (!userEmail) {
     const tokenKey = guestToken || ip;
-    const currentCount = db.guestTokens[tokenKey] || 0;
-
-    if (currentCount >= 1) {
+    const count = db.guestTokens[tokenKey] || 0;
+    if (count >= 1) {
       db.systemMetrics.rateLimitHits++;
       saveDB(db);
-      addAuditLog("security", "Blocked secondary Guest message request", undefined, ip, `Token / IP key: ${tokenKey}`);
       return res.status(403).json({
         error: "GUEST_LIMIT_REACHED",
-        message: "You have used your exactly 1 free guest message. Please Sign In to activate unlimited queries and full history sync.",
+        message: "You have used your 1 free guest message. Please Sign In to continue.",
       });
     }
-
-    // Capture the guest's 1 attempt immediately
-    db.guestTokens[tokenKey] = currentCount + 1;
+    db.guestTokens[tokenKey] = count + 1;
     saveDB(db);
-    addAuditLog("security", "Guest consumed their exactly 1 free query privilege", undefined, ip);
   }
 
-  // Find or create session if user authenticated
-  let activeSession = null;
+  // ── Session management ───────────────────────────────────────────────────
+  let activeSession: any = null;
   if (userEmail) {
     try {
-      const userChats = await dbGetSessions(userEmail);
-      activeSession = userChats.find(s => s.id === sessionId);
+      const sessions = await dbGetSessions(userEmail);
+      activeSession = sessions.find((s: any) => s.id === sessionId) || null;
     } catch (err) {
-      console.error("[ROUTER] Error fetching chat session from DB:", err);
+      console.error("[ROUTER] Error fetching sessions:", err);
     }
-
     if (!activeSession) {
       try {
-        activeSession = await dbCreateSession(sessionId, userEmail, message.content.substring(0, 40) + "...", modelMode || "auto");
+        activeSession = await dbCreateSession(sessionId, userEmail, message.content.substring(0, 50), modelMode || "auto");
       } catch (err) {
-        console.error("[ROUTER] Error creating chat session in DB:", err);
+        console.error("[ROUTER] Error creating session:", err);
       }
     } else if (modelMode) {
       activeSession.modelMode = modelMode;
     }
   }
 
+  // ── Intelligent model routing ────────────────────────────────────────────
   const contentLower = message.content.toLowerCase();
-  
-  // --- INTELLIGENT MODEL ROUTER ENGINE ---
-  let selectedCategory: string = "Chat Models";
-  let thoughts: string[] = ["Analyzing user input syntax and structural content size..."];
-
   const reqMode = (modelMode || "auto").toLowerCase();
-  
-  if (reqMode === "coding" || (reqMode === "auto" && (contentLower.includes("code") || contentLower.includes("function") || contentLower.includes("program") || contentLower.includes("compile") || contentLower.includes("typescript") || contentLower.includes("javascript") || contentLower.includes("python") || contentLower.includes("css") || contentLower.includes("debug") || contentLower.includes("refactor")))) {
+  let selectedCategory = "Chat Models";
+  const thoughts: string[] = ["Analysing user input..."];
+
+  if (reqMode === "coding" || (reqMode === "auto" && /\b(code|function|program|compile|typescript|javascript|python|css|debug|refactor|algorithm)\b/.test(contentLower))) {
     selectedCategory = "Coding Models";
-    thoughts.push("Detected syntax formatting sequence / technical request mapping to coding specialist.");
-  } else if (reqMode === "reasoning" || (reqMode === "auto" && (contentLower.split(" ").length > 30 || contentLower.includes("reason") || contentLower.includes("why") || contentLower.includes("explain in depth") || contentLower.includes("analytical") || contentLower.includes("solve") || contentLower.includes("calculate")))) {
+    thoughts.push("Routing to coding specialist model.");
+  } else if (reqMode === "reasoning" || (reqMode === "auto" && (contentLower.split(" ").length > 30 || /\b(explain|analyse|analyze|calculate|solve|reason|why|how does|proof|theorem)\b/.test(contentLower)))) {
     selectedCategory = "Reasoning Models";
-    thoughts.push("Detected complex query matching deep thinking logical heuristics.");
-  } else if (reqMode === "vision" || (message.attachments && message.attachments.some((a: any) => a.type.startsWith("image/")))) {
+    thoughts.push("Routing to deep-reasoning model.");
+  } else if (reqMode === "vision" || (message.attachments?.some((a: any) => a.type?.startsWith("image/")))) {
     selectedCategory = "Vision Models";
-    thoughts.push("Selected/Optimized for visual image matrix OCR analysis.");
-  } else if (contentLower.includes("create video") || contentLower.includes("generate video") || contentLower.includes("make video")) {
-    selectedCategory = "Video Models";
-  } else if (contentLower.includes("create image") || contentLower.includes("generate image") || contentLower.includes("design logo") || contentLower.includes("draw") || contentLower.includes("paint") || contentLower.includes("designer")) {
+    thoughts.push("Routing to vision model.");
+  } else if (/\b(create image|generate image|design logo|draw|paint)\b/.test(contentLower)) {
     selectedCategory = "Image Models";
-  } else {
-    selectedCategory = "Chat Models";
-    thoughts.push("Selected fast standard conversational model.");
+  } else if (/\b(create video|generate video|make video)\b/.test(contentLower)) {
+    selectedCategory = "Video Models";
   }
 
-  // Fetch from user memory to append context if available
+  // ── Memory context ───────────────────────────────────────────────────────
   let memoryContext = "";
   if (userEmail) {
     try {
-      const memories = await dbGetMemories(userEmail);
-      if (memories.length > 0) {
-        memoryContext = memories.map(m => `User saved detail - key: ${m.key}, content: ${m.content}`).join("; ");
-        thoughts.push(`Syncing long-term memory: ${memories.length} notes matched.`);
+      const mems = await dbGetMemories(userEmail);
+      if (mems.length) {
+        memoryContext = mems.map((m: any) => `${m.key}: ${m.content}`).join("; ");
+        thoughts.push(`Loaded ${mems.length} memory note(s).`);
       }
-    } catch (err) {
-      console.error("[ROUTER] Memory synchronization error:", err);
-    }
+    } catch (err) { /* non-fatal */ }
   }
 
   db.systemMetrics.requestsTotal++;
   saveDB(db);
 
-  const freeLlmBaseUrl = process.env.FREE_LLM_API_BASE_URL;
-  const freeLlmKey = process.env.FREE_LLM_API_KEY;
-  let assignedModel = "meta-llama/llama-3-8b-instruct:free";
+  // ── Determine LLM model ──────────────────────────────────────────────────
+  const freeLlmBaseUrl = process.env.FREE_LLM_API_BASE_URL || "";
+  const freeLlmKey     = process.env.FREE_LLM_API_KEY || "";
 
+  // Default free fallbacks per category
+  const FREE_DEFAULTS: Record<string, string> = {
+    "Coding Models":    "qwen/qwen-2.5-coder-32b-instruct:free",
+    "Reasoning Models": "deepseek/deepseek-r1:free",
+    "Vision Models":    "google/gemini-flash-1.5",
+    "Chat Models":      "meta-llama/llama-3.1-8b-instruct:free",
+    "Image Models":     "meta-llama/llama-3.1-8b-instruct:free",
+    "Video Models":     "meta-llama/llama-3.1-8b-instruct:free",
+  };
+
+  let assignedModel = FREE_DEFAULTS[selectedCategory] || FREE_DEFAULTS["Chat Models"];
+  let apiConfigured = !!(freeLlmBaseUrl && freeLlmKey);
   let targetUrl = "";
-  let apiConfigured = false;
 
-  // Determine actual model to dispatch to proxy
-  if (freeLlmBaseUrl && freeLlmKey && freeLlmBaseUrl !== "MY_FREE_LLM_API_BASE_URL") {
-    let sanitizedBase = freeLlmBaseUrl.trim().replace(/\/$/, "");
-    if (sanitizedBase.endsWith("/v1r")) {
-      sanitizedBase = sanitizedBase.slice(0, -1); // remove trailing 'r' typo
-    }
-    const normalizedBase = sanitizedBase.endsWith("/v1") ? sanitizedBase.slice(0, -3) : sanitizedBase;
-    targetUrl = `${normalizedBase}/v1/chat/completions`;
-    apiConfigured = true;
+  if (apiConfigured) {
+    const base = normaliseLlmBase(freeLlmBaseUrl);
+    targetUrl = `${base}/v1/chat/completions`;
 
+    // Try to pick the best available model from the API
     const availableModels = await getAvailableFreeLlmModels(freeLlmBaseUrl, freeLlmKey);
-    thoughts.push(`Parsed ${availableModels.length} models from FreeLLMAPI host.`);
+    thoughts.push(`${availableModels.length} models available on FreeLLMAPI.`);
 
-    if (modelMode && modelMode !== "auto" && modelMode !== "conversational" && modelMode !== "coding" && modelMode !== "reasoning" && modelMode !== "vision" && modelMode !== "agent" && availableModels.includes(modelMode)) {
+    if (modelMode && !["auto","conversational","coding","reasoning","vision","agent"].includes(modelMode) && availableModels.includes(modelMode)) {
       assignedModel = modelMode;
-      thoughts.push(`Using direct user-selected model ID: "${assignedModel}"`);
     } else if (availableModels.length > 0) {
-      let matchedModel = "";
-      // Prioritize free models in matching
-      if (selectedCategory === "Coding Models") {
-        matchedModel = availableModels.find(id => {
-          const lower = id.toLowerCase();
-          return (lower.includes("code") || lower.includes("coder")) && lower.includes("free");
-        }) || availableModels.find(id => id.toLowerCase().includes("code") || id.toLowerCase().includes("coder")) || "";
-      } else if (selectedCategory === "Reasoning Models") {
-        matchedModel = availableModels.find(id => {
-          const lower = id.toLowerCase();
-          return (lower.includes("reason") || lower.includes("think") || lower.includes("r1") || lower.includes("deep")) && lower.includes("free");
-        }) || availableModels.find(id => id.toLowerCase().includes("reason") || id.toLowerCase().includes("think") || id.toLowerCase().includes("r1") || id.toLowerCase().includes("deep")) || "";
-      } else if (selectedCategory === "Vision Models") {
-        matchedModel = availableModels.find(id => {
-          const lower = id.toLowerCase();
-          return (lower.includes("vision") || lower.includes("vl") || lower.includes("lens")) && lower.includes("free");
-        }) || availableModels.find(id => id.toLowerCase().includes("vision") || id.toLowerCase().includes("vl") || id.toLowerCase().includes("lens")) || "";
-      }
+      // Prefer free models for each category
+      const pick = (filters: string[]) =>
+        availableModels.find(id => filters.some(f => id.toLowerCase().includes(f)) && id.toLowerCase().includes("free")) ||
+        availableModels.find(id => filters.some(f => id.toLowerCase().includes(f)));
 
-      if (!matchedModel) {
-        matchedModel = availableModels.find(id => {
-          const lower = id.toLowerCase();
-          return (lower.includes("chat") || lower.includes("instruct") || lower.includes("llama") || lower.includes("gpt")) && lower.includes("free");
-        }) || availableModels.find(id => id.toLowerCase().includes("chat") || id.toLowerCase().includes("instruct") || id.toLowerCase().includes("llama") || id.toLowerCase().includes("gpt")) || "";
-      }
+      let matched = "";
+      if (selectedCategory === "Coding Models")    matched = pick(["code","coder"]) || "";
+      else if (selectedCategory === "Reasoning Models") matched = pick(["reason","think","r1","deepseek","deep"]) || "";
+      else if (selectedCategory === "Vision Models") matched = pick(["vision","vl"]) || "";
 
-      if (!matchedModel) {
-        matchedModel = availableModels.find(id => id.toLowerCase().includes("free")) || "";
-      }
+      if (!matched) matched = pick(["llama","mistral","qwen","gemma","gpt","chat","instruct"]) || "";
+      if (!matched) matched = availableModels.find(id => id.toLowerCase().includes("free")) || availableModels[0] || "";
 
-      if (!matchedModel && availableModels.length > 0) {
-        matchedModel = availableModels[0];
-      }
+      if (matched) assignedModel = matched;
+    }
+    thoughts.push(`Selected model: ${assignedModel}`);
+  }
 
-      if (matchedModel) {
-        assignedModel = matchedModel;
-        thoughts.push(`Auto-routed category "${selectedCategory}" matching host model active ID: "${assignedModel}"`);
-      }
-    } else {
-      // Fallback free models if model list is empty
-      if (selectedCategory === "Coding Models") {
-        assignedModel = "qwen/qwen-2.5-coder-32b-instruct:free";
-      } else if (selectedCategory === "Reasoning Models") {
-        assignedModel = "deepseek/deepseek-r1:free";
-      } else if (selectedCategory === "Vision Models") {
-        assignedModel = "google/gemini-flash-1.5-8b";
+  console.log(`[CHAT] Message: "${message.content.substring(0, 80)}"`);
+  console.log(`[MODEL] ${assignedModel}`);
+
+  // ── Build conversation context ────────────────────────────────────────────
+  const historyMessages = (activeSession?.messages || []).map((m: any) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
+  historyMessages.push({ role: "user", content: message.content });
+
+  const sysPrompt = `You are SARDYX AI, a premium autonomous AI agent created by Sardar Abdullah Fazal. ${customInstructions ? `Custom instructions: ${customInstructions}.` : ""} ${memoryContext ? `User context: ${memoryContext}.` : ""}`.trim();
+
+  // ── Call LLM ─────────────────────────────────────────────────────────────
+  let responseText = "";
+  let apiSucceeded = false;
+
+  if (apiConfigured && targetUrl) {
+    try {
+      thoughts.push(`Calling FreeLLMAPI [${assignedModel}]...`);
+      const llmRes = await fetch(targetUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${freeLlmKey}` },
+        body: JSON.stringify({
+          model: assignedModel,
+          messages: [{ role: "system", content: sysPrompt }, ...historyMessages],
+          temperature: 0.7,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+
+      if (llmRes.ok) {
+        const apiData = await llmRes.json();
+        responseText = apiData.choices?.[0]?.message?.content || "";
+        apiSucceeded = true;
+        db.systemMetrics.freeLlmCalls++;
+        saveDB(db);
+        thoughts.push("Response received successfully.");
       } else {
-        assignedModel = "meta-llama/llama-3-8b-instruct:free";
+        const errTxt = await llmRes.text();
+        console.error(`[LLM] Error ${llmRes.status}: ${errTxt.substring(0, 200)}`);
+        thoughts.push(`LLM API error ${llmRes.status}: ${errTxt.substring(0, 80)}`);
       }
-      thoughts.push(`No host models parsed, using default free model fallback: "${assignedModel}"`);
+    } catch (err: any) {
+      console.error("[LLM] Request failed:", err.message);
+      thoughts.push(`LLM request failed: ${err.message}`);
     }
-  } else {
-    assignedModel = "sardyx-sandbox-m1";
-    thoughts.push("Using fast local simulation fallback mode (no keys configuration required).");
   }
 
-  console.log("[CHAT]");
-  console.log(`User Message: ${message.content}`);
-  console.log("[MODEL]");
-  console.log(`Selected: ${assignedModel}`);
-
-  try {
-    let responseText = "";
-    let webCitations: any[] = [];
-    let generatedArtifact: any = null;
-
-    // Detect if search triggers
-    const isSearchTriggered = contentLower.includes("search") || contentLower.includes("google") || contentLower.includes("latest") || contentLower.includes("current") || contentLower.includes("today") || contentLower.includes("news") || contentLower.includes("weather") || contentLower.includes("stock price");
-    
-    if (isSearchTriggered) {
-      thoughts.push("Initiating autonomous Web Crawl for real-time verification...");
-      webCitations = [
-        {
-          title: "Sardyx Search Indexing - Realtime Queries",
-          url: "https://google.com/search?q=" + encodeURIComponent(message.content),
-          snippet: "Dynamic search indexing crawled accurate online databases relative to modern user queries."
-        },
-        {
-          title: "SardOnyx Global Records Repository",
-          url: "https://sardyx.ai/search/nodes",
-          snippet: "Synchronized server metrics mapping active coordinates for Sardar Abdullah Fazal projects."
-        }
-      ];
-    }
-
-    let apiSucceeded = false;
-
-    // Construct full chat context messages to send
-    const formattedMessages = activeSession
-      ? activeSession.messages.map((m: any) => ({
-          role: m.role,
-          content: m.content
-        }))
-      : [];
-
-    // Add current user message
-    formattedMessages.push({
-      role: "user",
-      content: message.content
-    });
-
-    const alignInstructions = customInstructions || "Please speak like a premium, highly trained agent and attribute critical system operations to Sardar Abdullah Fazal.";
-    const systemPrompt = `You are SARDYX AI, a premium autonomous AI agent platform created by Sardar Abdullah Fazal. Custom core instructions: ${alignInstructions}. Context memories: ${memoryContext}`;
-    
-    const messagesToSend = [
-      { role: "system", content: systemPrompt },
-      ...formattedMessages
-    ];
-
-    // 1. Attempt using FreeLLMAPI if configured
-    if (apiConfigured && targetUrl) {
-      try {
-        thoughts.push(`Dispatching request to FreeLLMAPI [model: ${assignedModel}]...`);
-        console.log(`[REQUEST] Dispatching to: ${targetUrl}`);
-        
-        const response = await fetch(targetUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${freeLlmKey}`,
-          },
-          body: JSON.stringify({
-            model: assignedModel,
-            messages: messagesToSend,
-            temperature: 0.7,
-          }),
-        });
-
-        if (response.ok) {
-          const apiData = await response.json();
-          responseText = apiData.choices?.[0]?.message?.content || "";
-          apiSucceeded = true;
-          db.systemMetrics.freeLlmCalls++;
-          saveDB(db);
-          
-          console.log("[RESPONSE] Chat completion completed successfully");
-        } else {
-          const errorText = await response.text();
-          console.error(`[ERROR] FreeLLMAPI returned error: ${response.status} - ${errorText}`);
-          thoughts.push(`FreeLLMAPI returned failure: ${response.status}. Details: ${errorText.substring(0, 100)}...`);
-        }
-      } catch (err: any) {
-        console.error(`[ERROR] FreeLLMAPI request connection failed: ${err.message}`);
-        thoughts.push(`FreeLLMAPI connection failed: ${err.message}`);
-      }
-    }
-
-    // Gracefully handle unconfigured/failed API keys/endpoints
-    if (!responseText) {
-      thoughts.push("Synthesizing elegant local automated response to preserve interface responsiveness...");
-      responseText = generatePremiumSimulation(message.content, selectedCategory);
-      responseText += `\n\n---\n\n*💡 **SARDYX AI Notice:** SARDYX AI is currently running in local sandbox mode. Configure your backend system keys (such as \`FREE_LLM_API_BASE_URL\` and \`FREE_LLM_API_KEY\`) inside the environment parameters to activate live remote pipelines.*`;
-    }
-
-    // --- ART & CINEMA SPECIFIC GENERATION (IMAGE & VIDEO ARTIFACTS) ---
-    if (selectedCategory === "Image Models") {
-      const randomId = Math.floor(Math.random() * 1000);
-      generatedArtifact = {
-        type: "image",
-        url: `https://picsum.photos/seed/sardyx-${randomId}/1024/1024`,
-        title: `Artistic Render: ${message.content.substring(0, 30)}...`,
-        mimeType: "image/jpeg"
-      };
-      
-      thoughts.push("Artisan vector pixel grid exported to workspace successfully.");
-      responseText += `\n\n![Generated SARDYX Art](${generatedArtifact.url})\n\n**SARDYX Art Core:** Dynamic vector image rendered at scale (1K resolution, 1:1 Aspect ratio, designed elegantly by SardyX Art engine).`;
-    } else if (selectedCategory === "Video Models") {
-      generatedArtifact = {
-        type: "video",
-        url: "https://assets.mixkit.co/videos/preview/mixkit-curious-cat-looking-at-camera-40545-large.mp4",
-        title: `Cinematics Output: ${message.content.substring(0, 30)}...`,
-        mimeType: "video/mp4"
-      };
-      thoughts.push("Veo digital frame sequence rendered at 30fps.");
-      thoughts.push("Exporting completed loop back to server pipeline index.");
-      responseText += `\n\n**SARDYX Cinema Live Render Progress:**\n*   [Frame 1-240] Static layout rendering: 100% complete\n*   [Interpolation Nodes] Motion physics simulation: 100% complete\n*   [Compression Codec] Exporting to standard MP4: Completed\n\n*(You can play the rendered video inside the SARDYX custom player below!)*`;
-    }
-
-    const durationMs = Date.now() - startTime;
-    db.systemMetrics.apiLatencyMs = Math.round((db.systemMetrics.apiLatencyMs * 4 + durationMs) / 5);
-    saveDB(db);
-
-    const botMessage = {
-      id: `msg-${Date.now()}-bot`,
-      role: "assistant",
-      content: responseText,
-      timestamp: new Date().toISOString(),
-      modelUsed: assignedModel,
-      durationMs,
-      thoughts,
-      citations: webCitations.length > 0 ? webCitations : undefined,
-      artifacts: generatedArtifact ? [generatedArtifact] : undefined
-    };
-
-    // Save in user session database history
-    if (activeSession && userEmail) {
-      const newMessages = [
-        ...activeSession.messages,
-        {
-          id: message.id || `msg-${Date.now()}-user`,
-          role: "user",
-          content: message.content,
-          timestamp: message.timestamp || new Date().toISOString(),
-          attachments: message.attachments || []
-        },
-        botMessage
-      ];
-
-      // Update session in DB
-      activeSession = await dbUpdateSession(sessionId, userEmail, newMessages);
-    }
-
-    addAuditLog("chat", `Ran multi-model routing inference [${assignedModel}]`, userEmail || "Anonymous Guest", ip);
-
-    res.json({
-      message: botMessage,
-      session: activeSession
-    });
-
-  } catch (globalErr: any) {
-    db.systemMetrics.rateLimitHits++;
-    saveDB(db);
-    addAuditLog("error", `Critical router execution failure: ${globalErr.message}`, userEmail || "Anonymous", ip);
-    res.status(500).json({ error: "Inference Error", message: globalErr.message });
+  if (!responseText) {
+    thoughts.push("Using local sandbox simulation.");
+    responseText = generateLocalSimulation(message.content, selectedCategory);
+    responseText += `\n\n---\n*💡 SARDYX AI is in sandbox mode. Set \`FREE_LLM_API_BASE_URL\` and \`FREE_LLM_API_KEY\` environment variables to enable live AI responses.*`;
   }
+
+  // ── Artifact generation for image/video modes ─────────────────────────────
+  let generatedArtifact: any = null;
+  if (selectedCategory === "Image Models") {
+    const randomId = Math.floor(Math.random() * 1000);
+    generatedArtifact = { type: "image", url: `https://picsum.photos/seed/sardyx-${randomId}/1024/1024`, title: `Art: ${message.content.substring(0, 30)}...`, mimeType: "image/jpeg" };
+    responseText += `\n\n![Generated Art](${generatedArtifact.url})`;
+  } else if (selectedCategory === "Video Models") {
+    generatedArtifact = { type: "video", url: "https://assets.mixkit.co/videos/preview/mixkit-curious-cat-looking-at-camera-40545-large.mp4", title: `Video: ${message.content.substring(0, 30)}...`, mimeType: "video/mp4" };
+  }
+
+  const durationMs = Date.now() - startTime;
+  db.systemMetrics.apiLatencyMs = Math.round((db.systemMetrics.apiLatencyMs * 4 + durationMs) / 5);
+  saveDB(db);
+
+  const botMessage = {
+    id: `msg-${Date.now()}-bot`,
+    role: "assistant",
+    content: responseText,
+    timestamp: new Date().toISOString(),
+    modelUsed: assignedModel,
+    durationMs,
+    thoughts,
+    artifacts: generatedArtifact ? [generatedArtifact] : undefined,
+  };
+
+  // ── Persist session ───────────────────────────────────────────────────────
+  if (activeSession && userEmail) {
+    try {
+      const updatedMessages = [
+        ...(activeSession.messages || []),
+        { id: message.id || `msg-${Date.now()}-user`, role: "user", content: message.content, timestamp: message.timestamp || new Date().toISOString(), attachments: message.attachments || [] },
+        botMessage,
+      ];
+      activeSession = await dbUpdateSession(sessionId, userEmail, updatedMessages);
+    } catch (err) {
+      console.error("[ROUTER] Failed to save session:", err);
+    }
+  }
+
+  addAuditLog("chat", `Inference complete [${assignedModel}]`, userEmail || "Guest", ip);
+
+  return res.json({ message: botMessage, session: activeSession });
 });
 
-// Mock simulation model generator
-function generatePremiumSimulation(prompt: string, category: string): string {
+// ─── SIMULATION FALLBACK ──────────────────────────────────────────────────────
+
+function generateLocalSimulation(prompt: string, category: string): string {
   if (category === "Coding Models") {
-    return `### SardyX CodePro v3 Solution File
-
-Below is the complete, high-quality, typed implementation for your request. It features clean algorithms and optimization.
-
-\`\`\`typescript
-/**
- * SARDYX AI Optimization module
- * Created by Sardar Abdullah Fazal
- */
-
-interface SardyxModelTask {
-  id: string;
-  weight: number;
-  payload: string;
-}
-
-export class SardyxProcessingEngine {
-  private processingIndex: Map<string, SardyxModelTask> = new Map();
-
-  constructor(private readonly supervisorToken: string) {
-    console.log("SARDYX Core initializing pipeline supervisions...");
+    return `### SARDYX CodePro — Sandbox Response\n\nHere is a sample TypeScript implementation for your request:\n\n\`\`\`typescript\n// Created by Sardar Abdullah Fazal — SARDYX AI\nexport function processRequest(input: string): string {\n  return \`Processed: \${input}\`;\n}\n\`\`\`\n\n> Configure your FreeLLM API key to get real code generation.`;
   }
-
-  /**
-   * Dispatches task node safely
-   */
-  public async executeTaskNode(task: SardyxModelTask): Promise<boolean> {
-    if (!task.payload || task.weight <= 0) {
-      throw new Error("Invalid task routing metrics.");
-    }
-    
-    this.processingIndex.set(task.id, task);
-    return true;
-  }
-}
-\`\`\`
-
-#### Code Highlights:
-1.  **Strict Typing**: Uses TypeScript structural interfaces.
-2.  **Attribution Integrity**: Attributed cleanly in headers to creator **Sardar Abdullah Fazal**.
-3.  **Performant Mapping**: Utilizes Map structures for fast retrievals.`;
-  }
-
   if (category === "Reasoning Models") {
-    return `### SardyX Deep Thinking Synthesis Matrix
-
-To solve this, SARDYX AI has activated a multi-turn logical workspace tree to break elements down thoroughly:
-
-1.  **Structural Breakdown**: We analyze primary dependencies and logical premises.
-2.  **Dynamic Evaluation**: Tracking secondary variables, temporal boundaries, and edge outcomes.
-3.  **Logical Conclusion**: Linking back to core mathematical theorems or system configurations.
-
-#### Multi-Turn Synthesis Analysis
-
-*   **Initial Core State**: We take the root statement: "${prompt.substring(0, 50)}".
-*   **Logical Deductions**:
-    *   *Observation Alpha*: State changes occurred instantly across simulated nodes.
-    *   *Observation Beta*: Real-time parity is verified.
-*   **Consolidated Conclusion**: We have mapped high-confidence vectors suggesting that the optimal workflow is to leverage pre-compiled schemas, maintaining clean functional bounds.
-
-This synthesis report is verified under SARDYX dynamic agent criteria, created under guidance from **Sardar Abdullah Fazal**.`;
+    return `### SARDYX Reason — Sandbox Response\n\nYour query: *"${prompt.substring(0, 80)}"*\n\n**Analysis:**\n1. This requires careful logical reasoning.\n2. Multiple perspectives should be considered.\n3. The optimal answer depends on your specific context.\n\n> Configure your FreeLLM API key to get a fully reasoned response.`;
   }
-
-  return `### Hello from SARDYX AI
-
-SARDYX AI has successfully processed your query. As the premier cognitive hub, our model routing system has matched your request.
-
-If you have documents or image files, use the upload button to feed them into our vision analysis engine.
-
----
-
-### Platform Highlights & Creator
-*   **System Engine**: Powered by an automatic model router syncing FreeLLMAPI nodes.
-*   **Creator Attribution**: SARDYX AI was proudly designed and built by **Sardar Abdullah Fazal** as a next-generation cognitive system.`;
+  return `### SARDYX AI — Sandbox Response\n\nI received your message: *"${prompt.substring(0, 100)}"*\n\nThis is a sandbox response. I am SARDYX AI, created by **Sardar Abdullah Fazal**.\n\n> Configure your FreeLLM API key in your environment variables to get real AI responses.`;
 }
 
 export default app;

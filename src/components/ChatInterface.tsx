@@ -63,8 +63,10 @@ export default function ChatInterface({
   const [copyingMessageId, setCopyingMessageId] = useState<string | null>(null);
 
   // Speech recognition states
-  const [isListening, setIsListening] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
+  const [showMicPermissionModal, setShowMicPermissionModal] = useState(false);
+  const [permissionModalError, setPermissionModalError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
   // Attachment states
@@ -261,6 +263,79 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
     reader.readAsDataURL(file);
   };
 
+  const getUserMediaWithRetry = async (retries = 2, delay = 1000): Promise<MediaStream> => {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          return await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        // Fallback for legacy webkit / moz prefixes
+        const legacyGetUserMedia = (navigator as any).getUserMedia || 
+                                    (navigator as any).webkitGetUserMedia || 
+                                    (navigator as any).mozGetUserMedia || 
+                                    (navigator as any).msGetUserMedia;
+        if (legacyGetUserMedia) {
+          return await new Promise<MediaStream>((resolve, reject) => {
+            legacyGetUserMedia.call(navigator, { audio: true }, resolve, reject);
+          });
+        }
+        throw new Error("No microphone support detected in this browser's security context.");
+      } catch (err) {
+        if (i === retries) {
+          throw err;
+        }
+        console.warn(`[SILENT RETRY] Microphone access attempt ${i + 1} failed, retrying in ${delay}ms...`, err);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+    throw new Error("Failed to initialize audio input after retries");
+  };
+
+  const requestMicrophonePermission = async () => {
+    setPermissionModalError(null);
+    try {
+      // Prompt high-fidelity browser dialog via our silent retry getUserMedia helper
+      const stream = await getUserMediaWithRetry(2, 500);
+      // Clean up track streams right after permission verify
+      stream.getTracks().forEach(track => track.stop());
+      
+      setShowMicPermissionModal(false);
+      toggleSpeechRecognition();
+    } catch (err: any) {
+      console.error("Microphone browser query error: ", err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setPermissionModalError("Permission was explicitly denied. Please adjust your browser settings (look for the key/camera icon in the address bar) to allow microphone access, and then reload the page.");
+      } else {
+        setPermissionModalError(`Interactive device failed: ${err.message || "Microphone hardware was blocked or not detected. Adjust system privacy controls."}`);
+      }
+    }
+  };
+
+  const handleMicClick = async () => {
+    if (isRecording) {
+      toggleSpeechRecognition();
+      return;
+    }
+
+    setPermissionModalError(null);
+
+    // query permission status if supported natively
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const result = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        if (result.state === 'granted') {
+          toggleSpeechRecognition();
+        } else {
+          setShowMicPermissionModal(true);
+        }
+      } catch (e) {
+        setShowMicPermissionModal(true);
+      }
+    } else {
+      setShowMicPermissionModal(true);
+    }
+  };
+
   const toggleSpeechRecognition = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -269,7 +344,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
       return;
     }
 
-    if (isListening) {
+    if (isRecording) {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -277,7 +352,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
           console.error("Error stopping recognition", e);
         }
       }
-      setIsListening(false);
+      setIsRecording(false);
     } else {
       setSpeechError(null);
       try {
@@ -287,12 +362,12 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         rec.lang = 'en-US';
 
         rec.onstart = () => {
-          setIsListening(true);
+          setIsRecording(true);
         };
 
         rec.onerror = (event: any) => {
           console.error("Speech recognition error:", event);
-          setIsListening(false);
+          setIsRecording(false);
           const errMessage = event.error === 'not-allowed' 
             ? 'Permission denied. Please allow microphone access.' 
             : `Error: ${event.error}`;
@@ -301,7 +376,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         };
 
         rec.onend = () => {
-          setIsListening(false);
+          setIsRecording(false);
         };
 
         rec.onresult = (event: any) => {
@@ -320,7 +395,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         console.error("Failed to start speech recognition:", err);
         setSpeechError(`Failed to initialize: ${err.message || err}`);
         setTimeout(() => setSpeechError(null), 4000);
-        setIsListening(false);
+        setIsRecording(false);
       }
     }
   };
@@ -928,6 +1003,24 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
               </div>
             )}
 
+            {/* Real-time speech status indicator */}
+            {isRecording && (
+              <div className="absolute top-[-44px] left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/30 backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-3 shadow-xl z-20 animate-fade-in">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-550"></span>
+                </span>
+                <span className="text-[10px] font-mono font-bold tracking-wider text-red-200">SARDYX ACTIVE SPEECH</span>
+                <div className="flex gap-0.5 items-end justify-center h-3 w-8">
+                  <div className="w-0.5 bg-red-400 rounded-full animate-bounce h-2" style={{ animationDelay: '0.1s', animationDuration: '0.7s' }}></div>
+                  <div className="w-0.5 bg-red-400 rounded-full animate-bounce h-3" style={{ animationDelay: '0.2s', animationDuration: '0.5s' }}></div>
+                  <div className="w-0.5 bg-red-450 rounded-full animate-bounce h-1.5" style={{ animationDelay: '0.3s', animationDuration: '0.8s' }}></div>
+                  <div className="w-0.5 bg-red-400 rounded-full animate-bounce h-3.5" style={{ animationDelay: '0s', animationDuration: '0.6s' }}></div>
+                  <div className="w-0.5 bg-red-400 rounded-full animate-bounce h-2" style={{ animationDelay: '0.4s', animationDuration: '0.7s' }}></div>
+                </div>
+              </div>
+            )}
+
             {/* Injected model fallback warning if limits met */}
             {isLimitBlocked ? (
               <div className="p-3 bg-red-950/20 border border-red-900/30 rounded-2xl flex items-center justify-between text-xs text-red-300 animate-fade-in">
@@ -960,7 +1053,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
                 <input
                   type="text"
-                  placeholder={isListening ? "🎙️ Listening... speak clearly to SARDYX AI" : "Ask SARDYX AI or prompt to generate code, art or videos..."}
+                  placeholder={isRecording ? "🎙️ Listening... speak clearly to SARDYX AI" : "Ask SARDYX AI or prompt to generate code, art or videos..."}
                   value={inputPrompt}
                   onChange={(e) => setInputPrompt(e.target.value)}
                   disabled={loading}
@@ -969,16 +1062,16 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
                 <button
                   type="button"
-                  onClick={toggleSpeechRecognition}
+                  onClick={handleMicClick}
                   className={`p-2.5 border rounded-xl cursor-pointer transition-all shrink-0 ${
-                    isListening 
+                    isRecording 
                       ? "bg-red-650 border-red-500 text-white animate-pulse" 
                       : "bg-black border-white/5 hover:border-white/10 text-zinc-400 hover:text-white"
                   }`}
-                  title={isListening ? "Stop listening" : "Voice to text (Microphone)"}
+                  title={isRecording ? "Stop listening" : "Voice to text (Microphone)"}
                   disabled={loading}
                 >
-                  {isListening ? (
+                  {isRecording ? (
                     <MicOff className="w-4 h-4 text-white" />
                   ) : (
                     <Mic className="w-4 h-4" />
@@ -1018,6 +1111,96 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
           </div>
         </section>
       </main>
+
+      {/* Custom Voice & Microphone Permission Explainer Modal */}
+      {showMicPermissionModal && (
+        <div 
+          id="mic-permission-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050505]/90 backdrop-blur-md animate-fade-in"
+          onClick={() => setShowMicPermissionModal(false)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="relative w-full max-w-md p-8 rounded-3xl bg-[#0a0a0a] border border-white/10 shadow-2xl overflow-hidden"
+          >
+            {/* Decorative glowing gradient backdrop matching other modals */}
+            <div className="absolute top-[-20%] left-[-20%] w-[150px] h-[150px] bg-red-650/10 rounded-full blur-2xl"></div>
+            <div className="absolute bottom-[-10%] right-[-1%] w-[150px] h-[150px] bg-indigo-550/10 rounded-full blur-2xl"></div>
+
+            {/* Close button */}
+            <button 
+              onClick={() => setShowMicPermissionModal(false)}
+              className="absolute top-4 right-4 p-1.5 hover:text-white text-zinc-400 hover:bg-zinc-800 rounded-lg cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Header icon and title */}
+            <div className="text-center relative z-10 mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-indigo-550 rounded-2xl flex items-center justify-center shadow-lg shadow-red-500/20 mx-auto mb-4 animate-pulse">
+                <Mic className="text-black w-5 h-5 font-bold" />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight text-white mb-2">
+                Enable Voice Typing Input
+              </h2>
+              <p className="text-zinc-400 text-xs sm:text-sm">
+                SARDYX AI utilizes your microphone to transcribe real-time voice messages locally in the browser.
+              </p>
+            </div>
+
+            {/* Permission Benefits & Offline Security assurances */}
+            <div className="space-y-4 mb-6 relative z-10">
+              <div className="p-3.5 rounded-xl bg-zinc-900/30 border border-white/5 space-y-3">
+                <div className="flex gap-3 items-start text-xs text-zinc-300">
+                  <span className="w-2 px-1 text-indigo-500 font-bold">•</span>
+                  <div>
+                    <span className="font-semibold text-white block">Offline Transcription Security</span>
+                    All voice data is transcribed instantly inside your browser and is never stored, catalogued, or processed on external servers.
+                  </div>
+                </div>
+                <div className="flex gap-3 items-start text-xs text-zinc-300">
+                  <span className="w-2 px-1 text-indigo-500 font-bold">•</span>
+                  <div>
+                    <span className="font-semibold text-white block">Speed Prompt & Code Generation</span>
+                    Compose complex code workflows, instructions, document summaries or art parameters naturally matching conversational speeds.
+                  </div>
+                </div>
+                <div className="flex gap-3 items-start text-xs text-zinc-300">
+                  <span className="w-2 px-1 text-indigo-500 font-bold">•</span>
+                  <div>
+                    <span className="font-semibold text-white block">Unified UI Status HUD</span>
+                    A real-time active status waveform notifier appears inside your input bar to track exact sensing and recording feedback.
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Interactive Errors (if blocked previously) */}
+              {permissionModalError && (
+                <div className="p-3.5 rounded-xl bg-red-955/40 border border-red-900/40 text-[11px] text-red-300 animate-fade-in flex flex-col gap-2">
+                  <span className="font-semibold text-red-200 block">System Access Restrained</span>
+                  <p className="leading-relaxed">{permissionModalError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 relative z-10">
+              <button
+                onClick={() => setShowMicPermissionModal(false)}
+                className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 border border-white/5 text-zinc-300 hover:text-white font-semibold text-xs rounded-xl transition-all cursor-pointer text-center"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={requestMicrophonePermission}
+                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all cursor-pointer text-center"
+              >
+                Allow Access
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

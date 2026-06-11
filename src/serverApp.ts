@@ -19,6 +19,11 @@ if (fs.existsSync(envPath)) {
 
 const app = express();
 
+// Health check - always first
+app.get(['/health', '/api/health'], (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), message: 'SARDYX AI Backend is running' });
+});
+
 // Set up server-side data paths
 const isVercel = process.env.VERCEL === "1" || !!process.env.VERCEL;
 const DATA_DIR = isVercel ? "/tmp" : path.join(process.cwd(), "db_data");

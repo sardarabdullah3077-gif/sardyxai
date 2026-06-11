@@ -25,11 +25,53 @@
       "createdAt": "2026-06-11T16:12:00.463Z",
       "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=newuser%40example.com",
       "password": "password123"
+    },
+    "user123@test.com": {
+      "id": "usr-local-1781194811177",
+      "email": "user123@test.com",
+      "name": "User 123",
+      "role": "user",
+      "createdAt": "2026-06-11T16:20:11.178Z",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=user123%40test.com",
+      "password": "pass123"
+    },
+    "demo@test.com": {
+      "id": "usr-local-1781194882812",
+      "email": "demo@test.com",
+      "name": "Demo User",
+      "role": "user",
+      "createdAt": "2026-06-11T16:21:22.812Z",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=demo%40test.com",
+      "password": "demo123"
     }
   },
   "sessions": [],
   "memories": [],
   "auditLogs": [
+    {
+      "id": "log-1781194882814-kspzu",
+      "timestamp": "2026-06-11T16:21:22.814Z",
+      "type": "auth",
+      "message": "Local sandbox account registered: demo@test.com",
+      "userEmail": "demo@test.com",
+      "ipAddress": "127.0.0.1"
+    },
+    {
+      "id": "log-1781194811179-vhpaz",
+      "timestamp": "2026-06-11T16:20:11.179Z",
+      "type": "auth",
+      "message": "Local sandbox account registered: user123@test.com",
+      "userEmail": "user123@test.com",
+      "ipAddress": "127.0.0.1"
+    },
+    {
+      "id": "log-1781194753747-sn20x",
+      "timestamp": "2026-06-11T16:19:13.747Z",
+      "type": "auth",
+      "message": "Local sandbox account authenticated: newuser@example.com",
+      "userEmail": "newuser@example.com",
+      "ipAddress": "127.0.0.1"
+    },
     {
       "id": "log-1781194327624-2723e",
       "timestamp": "2026-06-11T16:12:07.624Z",

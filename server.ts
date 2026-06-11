@@ -17,13 +17,19 @@ async function startServer() {
       appType: "spa",
     });
     
-    // Skip Vite middleware for API routes - handle them before Vite
+    // Use Vite only for non-API requests
+    // API routes are already handled by Express app from serverApp.ts
     app.use((req, res, next) => {
-      if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
-        // Skip Vite for API routes
+      // Skip Vite middleware for:
+      // 1. API requests
+      // 2. Static assets (to avoid Vite processing them)
+      if (req.path.startsWith('/api/') || 
+          req.path.startsWith('/auth/') ||
+          req.path.startsWith('/health')) {
+        // Let Express handlers deal with these
         return next();
       }
-      // Use Vite for other requests
+      // For everything else (HTML, CSS, JS, assets), use Vite
       vite.middlewares(req, res, next);
     });
   } else {
@@ -34,8 +40,14 @@ async function startServer() {
     });
   }
 
+  // Final 404 handler
+  app.use((req, res) => {
+    res.status(404).json({ error: "Not Found", path: req.path, method: req.method });
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[SARDYX Central Server] Running on http://localhost:${PORT}`);
+    console.log(`[SARDYX Central Server] Health check: http://localhost:${PORT}/health`);
   });
 }
 

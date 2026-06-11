@@ -10,7 +10,7 @@ dotenv.config();
 
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
-import { SARDYX_SYSTEM_PROMPT, injectUserContext } from "../src/lib/systemPromptConstants";
+import { SARDYX_SYSTEM_PROMPT, injectUserContext } from "./systemPromptConstants";
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));

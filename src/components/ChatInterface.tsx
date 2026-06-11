@@ -546,6 +546,23 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             messages: [...cleanedMsgs, result.message]
           });
         }
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        if (errData.error === 'GUEST_LIMIT_REACHED' || response.status === 403) {
+          setIsLimitBlocked(true);
+          onOpenAuth();
+        } else {
+          const sysErrorMsg: Message = {
+            id: `msg-${Date.now()}-error`,
+            role: 'assistant',
+            content: `⚠️ **SARDYX AI System Alert:** ${errData.message || 'The backend was unable to complete the execution request. Check keys or verify server balance.'}`,
+            timestamp: new Date().toISOString()
+          };
+          setActiveSession({
+            ...activeSession,
+            messages: [...cleanedMsgs, sysErrorMsg]
+          });
+        }
       }
     } catch (err) {
       console.error(err);

@@ -141,7 +141,7 @@ export default function LandingPage({ onStartSession, onOpenAuth, isAuthenticate
     },
     {
       q: "How does the Guest Access message limit work?",
-      a: "Unauthenticated guest visitors are allowed exactly 1 free query to test SARDYX model capabilities. Further queries are protected and require a secure Google Sign-in to sync conversations and enable unlimited access."
+      a: "Unauthenticated guest visitors are allowed exactly 1 free query to test SARDYX model capabilities. Further queries are protected and require a secure Sign-in to sync conversations and enable unlimited access."
     },
     {
       q: "How does the Intelligent Model Router choose models?",

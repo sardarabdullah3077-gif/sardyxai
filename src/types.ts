@@ -91,7 +91,6 @@ export interface AuditLog {
 
 export interface SystemHealthMetrics {
   freeLlmStatus: 'healthy' | 'unhealthy' | 'unknown';
-  geminiStatus: 'healthy' | 'unhealthy' | 'unknown';
   apiLatencyMs: number;
   requestsTotal: number;
   rateLimitHits: number;

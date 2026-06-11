@@ -37,7 +37,6 @@ interface DBStructure {
     apiLatencyMs: number;
     rateLimitHits: number;
     freeLlmCalls: number;
-    geminiCalls: number;
   };
 }
 
@@ -70,7 +69,6 @@ const defaultDB: DBStructure = {
     apiLatencyMs: 140,
     rateLimitHits: 0,
     freeLlmCalls: 0,
-    geminiCalls: 0,
   },
 };
 
@@ -146,7 +144,187 @@ const getAvailableFreeLlmModels = async (baseUrl: string, key: string): Promise<
   return [];
 };
 
-// --- AUTHENTICATION ENDPOINTS ---
+// --- AUTHENTICATION ENDPOINTS (SUPABASE INTEGRATION) ---
+
+// Expose public Supabase credentials securely to client
+app.get(["/api/config/supabase", "/config/supabase"], (req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || "",
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
+  });
+});
+
+// Generate direct Google OAuth URL from Supabase
+app.get(["/api/auth/google-url", "/auth/google-url"], async (req, res) => {
+  try {
+    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+    const redirectUri = `${appUrl.replace(/\/$/, "")}/auth/callback`;
+
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(
+      process.env.SUPABASE_URL || "",
+      process.env.SUPABASE_ANON_KEY || ""
+    );
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: redirectUri,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({ url: data.url });
+  } catch (err: any) {
+    console.error("Failed to generate Google OAuth URL:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Supabase Direct callback target - handles authorization code exchange
+app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
+  const code = req.query.code as string;
+  const error = req.query.error as string;
+  const error_description = req.query.error_description as string;
+
+  if (error) {
+    return res.send(`
+      <html>
+        <body style="background-color: #050505; color: #f4f4f5; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; padding: 1rem; margin: 0;">
+          <div style="text-align: center; max-width: 440px; padding: 2.5rem 2rem; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 1.5rem; background: #0a0a0a; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+            <h2 style="color: #ef4444; margin-top: 0; margin-bottom: 0.75rem; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em;">Authentication Failed</h2>
+            <p style="color: #a1a1aa; font-size: 0.875rem; line-height: 1.5; margin-bottom: 0;">${error_description || error}</p>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage({ type: 'OAUTH_AUTH_FAILURE', error: "${error_description || error}" }, '*');
+                setTimeout(() => window.close(), 2500);
+              }
+            </script>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  if (code) {
+    try {
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(
+        process.env.SUPABASE_URL || "",
+        process.env.SUPABASE_ANON_KEY || ""
+      );
+
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) throw exchangeError;
+
+      const session = data.session;
+      const user = session?.user;
+      const email = user?.email || "";
+      const name = user?.user_metadata?.full_name || user?.user_metadata?.name || email.split('@')[0];
+      const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`;
+      const userId = user?.id || `usr-${Date.now()}`;
+
+      if (email) {
+        const db = getDB();
+        db.users[email] = {
+          id: userId,
+          email,
+          name,
+          role: "user",
+          createdAt: user?.created_at || new Date().toISOString(),
+          avatarUrl,
+        };
+        saveDB(db);
+        addAuditLog("auth", `Synced profile via Google Sign-In: ${email}`, email, getClientIp(req));
+      }
+
+      res.send(`
+        <html>
+          <body style="background-color: #050505; color: #f4f4f5; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; padding: 1rem; margin: 0;">
+            <div style="text-align: center; max-width: 440px; padding: 2.5rem 2rem; border: 1px solid rgba(99, 102, 241, 0.15); border-radius: 1.5rem; background: #0a0a0a; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+              <div style="width: 52px; height: 52px; background: linear-gradient(135deg, #6366f1, #22d3ee); border-radius: 0.875rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);">
+                <span style="color: #000; font-weight: 900; font-size: 1.35rem;">S</span>
+              </div>
+              <h2 style="color: #ffffff; margin-top: 0; margin-bottom: 0.5rem; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em;">Cognitive Core Connected</h2>
+              <p style="color: #a1a1aa; font-size: 0.875rem; line-height: 1.5; margin-bottom: 0;">Synchronizing Google Auth handshake. Backchannel verified.</p>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({ 
+                    type: 'OAUTH_AUTH_SUCCESS', 
+                    email: "${email}",
+                    name: "${name}",
+                    avatarUrl: "${avatarUrl}",
+                    id: "${userId}",
+                    access_token: "${session?.access_token || ''}",
+                    refresh_token: "${session?.refresh_token || ''}"
+                  }, '*');
+                  window.close();
+                } else {
+                  window.location.href = '/';
+                }
+              </script>
+            </div>
+          </body>
+        </html>
+      `);
+      return;
+    } catch (err: any) {
+      console.error("Exchange code failed:", err.message);
+      return res.send(`
+        <html>
+          <body style="background-color: #050505; color: #f4f4f5; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; padding: 1rem; margin: 0;">
+            <div style="text-align: center; max-width: 440px; padding: 2.5rem 2rem; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 1.5rem; background: #0a0a0a;">
+              <h2 style="color: #ef4444; margin-top: 0; margin-bottom: 0.75rem; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em;">Session Handshake Failed</h2>
+              <p style="color: #a1a1aa; font-size: 0.875rem; line-height: 1.5; margin-bottom: 0;">${err.message}</p>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_FAILURE', error: "${err.message}" }, '*');
+                  setTimeout(() => window.close(), 2500);
+                }
+              </script>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+  }
+
+  // Fragment credential fallback for implicit flows
+  res.send(`
+    <html>
+      <body style="background-color: #050505; color: #f4f4f5; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+        <div style="text-align: center;">
+          <p style="color: #a1a1aa; font-size: 0.875rem;">Decoding credentials...</p>
+          <script>
+            const hash = window.location.hash;
+            if (hash) {
+              const params = new URLSearchParams(hash.substring(1));
+              const accessToken = params.get('access_token');
+              const refreshToken = params.get('refresh_token');
+              if (accessToken && window.opener) {
+                window.opener.postMessage({ 
+                  type: 'OAUTH_FRAGMENT_SUCCESS', 
+                  access_token: accessToken,
+                  refresh_token: refreshToken
+                }, '*');
+                window.close();
+              }
+            } else {
+              if (window.opener) {
+                window.opener.postMessage({ type: 'OAUTH_AUTH_FAILURE', error: "No code or fragment found." }, '*');
+                setTimeout(() => window.close(), 2500);
+              }
+            }
+          </script>
+        </div>
+      </body>
+    </html>
+  `);
+});
 
 // Get current active session based on Authorization header
 app.get(["/api/auth/session", "/auth/session"], (req, res) => {
@@ -165,9 +343,9 @@ app.get(["/api/auth/session", "/auth/session"], (req, res) => {
   return res.json({ session: null });
 });
 
-// Login or mock registration
+// Synced login route to record dynamic profiles generated from Google OAuth metadata
 app.post(["/api/auth/login", "/auth/login"], (req, res) => {
-  const { email, name } = req.body;
+  const { email, name, avatarUrl, id } = req.body;
   if (!email) {
     return res.status(400).json({ error: "Email is required." });
   }
@@ -176,20 +354,24 @@ app.post(["/api/auth/login", "/auth/login"], (req, res) => {
   let user = db.users[email];
 
   if (!user) {
-    // Generate new user
     user = {
-      id: `usr-${Date.now()}`,
+      id: id || `usr-${Date.now()}`,
       email,
       name: name || email.split("@")[0],
       role: "user",
       createdAt: new Date().toISOString(),
-      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
+      avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
     };
     db.users[email] = user;
     saveDB(db);
-    addAuditLog("auth", `New user created and logged in: ${email}`, email, getClientIp(req));
+    addAuditLog("auth", `Profile initialized via Google OAuth syncing: ${email}`, email, getClientIp(req));
   } else {
-    addAuditLog("auth", `User logged in: ${email}`, email, getClientIp(req));
+    if (name) user.name = name;
+    if (avatarUrl) user.avatarUrl = avatarUrl;
+    if (id) user.id = id;
+    db.users[email] = user;
+    saveDB(db);
+    addAuditLog("auth", `Profile updated and logged in: ${email}`, email, getClientIp(req));
   }
 
   res.json({ user, token: email });
@@ -509,7 +691,7 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
       addAuditLog("security", "Blocked secondary Guest message request", undefined, ip, `Token / IP key: ${tokenKey}`);
       return res.status(403).json({
         error: "GUEST_LIMIT_REACHED",
-        message: "You have used your exactly 1 free guest message. Please Sign In to activate unlimited queries and full history sync.",
+        message: "You have used your exactly 1 free guest message. Please Sign In with Google to activate unlimited queries and full history sync.",
       });
     }
 

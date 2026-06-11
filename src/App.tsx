@@ -10,6 +10,7 @@ import ChatInterface from './components/ChatInterface';
 import AuthModal from './components/AuthModal';
 import UserDashboard from './components/UserDashboard';
 import { UserProfile } from './types';
+import { getSupabase } from './lib/supabase';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<'landing' | 'workspace'>('landing');
@@ -31,11 +32,53 @@ export default function App() {
     }
     setGuestToken(gToken);
 
-    // Bootstrap user session from local storage token
-    const savedToken = localStorage.getItem('sardyx_auth_token');
-    if (savedToken) {
-      fetchUserSession(savedToken);
-    }
+    // Bootstrap user session from local storage token OR Supabase persistence
+    const bootstrapSession = async () => {
+      // 1. Try restoring Supabase persistent Google session first
+      try {
+        const supabase = await getSupabase();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && session.user) {
+          const sUser = session.user;
+          const email = sUser.email || "";
+          const name = sUser.user_metadata?.full_name || sUser.user_metadata?.name || email.split('@')[0];
+          const avatarUrl = sUser.user_metadata?.avatar_url || sUser.user_metadata?.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`;
+          const id = sUser.id;
+
+          localStorage.setItem('sardyx_auth_token', email);
+          setUserToken(email);
+          setUser({
+            id,
+            email,
+            name,
+            role: 'user',
+            createdAt: sUser.created_at || new Date().toISOString(),
+            avatarUrl,
+          });
+
+          // Sync with custom central server record to ensure compatibility
+          await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, name, avatarUrl, id }),
+          });
+
+          setCurrentScreen('workspace');
+          setIsGuestBlocked(false);
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to restore Supabase secure session:", err);
+      }
+
+      // 2. Fallback to existing manual token handshake check
+      const savedToken = localStorage.getItem('sardyx_auth_token');
+      if (savedToken) {
+        fetchUserSession(savedToken);
+      }
+    };
+
+    bootstrapSession();
     
     // Evaluate guest locking logs from server on load
     checkGuestLock(gToken);
@@ -75,6 +118,8 @@ export default function App() {
         const data = await response.json();
         if (data.currentCount >= 1 && !user) {
           setIsGuestBlocked(true);
+        } else {
+          setIsGuestBlocked(false);
         }
       }
     } catch (err) {
@@ -82,20 +127,42 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = (email: string, name: string) => {
+  const handleLoginSuccess = async (
+    email: string, 
+    name: string, 
+    avatarUrl?: string, 
+    id?: string, 
+    access_token?: string, 
+    refresh_token?: string
+  ) => {
     localStorage.setItem('sardyx_auth_token', email);
     setUserToken(email);
-    const mockUser: UserProfile = {
-      id: `usr-${Date.now()}`,
+    
+    const userProfile: UserProfile = {
+      id: id || `usr-${Date.now()}`,
       email,
       name: name || email.split('@')[0],
       role: 'user',
       createdAt: new Date().toISOString(),
-      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
+      avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
     };
-    setUser(mockUser);
+
+    setUser(userProfile);
     setIsGuestBlocked(false);
     setCurrentScreen('workspace');
+
+    // Securely cache Supabase Session for complete token-refresh persistence
+    if (access_token && refresh_token) {
+      try {
+        const supabase = await getSupabase();
+        await supabase.auth.setSession({
+          access_token,
+          refresh_token
+        });
+      } catch (err) {
+        console.error("Failed to commit session to Supabase Engine:", err);
+      }
+    }
   };
 
   const handleLogout = async () => {
@@ -108,6 +175,14 @@ export default function App() {
     } catch (err) {
       console.error(err);
     }
+
+    try {
+      const supabase = await getSupabase();
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Failed to clear Supabase central session:", err);
+    }
+
     localStorage.removeItem('sardyx_auth_token');
     setUser(null);
     setUserToken('');

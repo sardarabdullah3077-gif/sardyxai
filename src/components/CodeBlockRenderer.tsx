@@ -137,7 +137,7 @@ export default function CodeBlockRenderer({ inline, className, children }: CodeB
       </div>
 
       {/* Body content */}
-      <div className="relative">
+      <div className="relative overflow-auto scrollbar-premium">
         {activeTab === 'code' ? (
           <SyntaxHighlighter
             language={language || 'text'}
@@ -228,7 +228,7 @@ export default function CodeBlockRenderer({ inline, className, children }: CodeB
           {/* Modal Content */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === 'code' ? (
-              <div className="flex-1 overflow-auto bg-gradient-to-b from-[#0d0d0d] to-[#000]">
+              <div className="flex-1 overflow-auto bg-gradient-to-b from-[#0d0d0d] to-[#000] scrollbar-light">
                 <SyntaxHighlighter
                   language={language || 'text'}
                   style={vscDarkPlus as any}

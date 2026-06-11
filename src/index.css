@@ -6,7 +6,143 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Smooth Scrolling - Global Premium Feel */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbars - Premium Dark Theme */
+/* Firefox Custom Scrollbar */
+* {
+  scrollbar-color: rgba(113, 113, 122, 0.5) transparent;
+  scrollbar-width: thin;
+}
+
+/* Webkit (Chrome, Safari, Edge) Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.4);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.7);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: rgba(113, 113, 122, 0.9);
+  background-clip: padding-box;
+}
+
+/* Custom scrollbar for modal overlays - lighter */
+.fixed::-webkit-scrollbar,
+[role="dialog"]::-webkit-scrollbar {
+  width: 10px;
+}
+
+.fixed::-webkit-scrollbar-thumb,
+[role="dialog"]::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.5);
+  border-radius: 5px;
+}
+
+.fixed::-webkit-scrollbar-thumb:hover,
+[role="dialog"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.8);
+}
+
 @layer utilities {
+  /* Scroll Container - Premium smooth scrolling */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+
+  /* Premium scrollbar classes for specific elements */
+  .scrollbar-premium {
+    scrollbar-color: rgba(113, 113, 122, 0.5) transparent;
+  }
+
+  .scrollbar-premium::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-premium::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-premium::-webkit-scrollbar-thumb {
+    background: rgba(113, 113, 122, 0.4);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .scrollbar-premium::-webkit-scrollbar-thumb:hover {
+    background: rgba(113, 113, 122, 0.7);
+    background-clip: padding-box;
+  }
+
+  .scrollbar-premium::-webkit-scrollbar-thumb:active {
+    background: rgba(113, 113, 122, 0.9);
+    background-clip: padding-box;
+  }
+
+  /* Light scrollbar variant for modals and overlays */
+  .scrollbar-light {
+    scrollbar-color: rgba(161, 161, 170, 0.5) transparent;
+  }
+
+  .scrollbar-light::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scrollbar-light::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-light::-webkit-scrollbar-thumb {
+    background: rgba(161, 161, 170, 0.5);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .scrollbar-light::-webkit-scrollbar-thumb:hover {
+    background: rgba(161, 161, 170, 0.8);
+    background-clip: padding-box;
+  }
+
+  .scrollbar-light::-webkit-scrollbar-thumb:active {
+    background: rgba(161, 161, 170, 1);
+    background-clip: padding-box;
+  }
+
+  /* Scroll momentum for iOS - better mobile feel */
+  .scroll-touch {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Smooth scroll inside containers */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }

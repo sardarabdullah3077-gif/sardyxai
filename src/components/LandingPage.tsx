@@ -313,7 +313,7 @@ export default function LandingPage({ onStartSession, onOpenAuth, isAuthenticate
             </div>
             {/* Mock Main chat area */}
             <div className="col-span-12 md:col-span-9 flex flex-col justify-between py-2">
-              <div className="space-y-4 overflow-y-auto max-h-[300px] pr-2">
+              <div className="space-y-4 overflow-y-auto max-h-[300px] pr-2 scrollbar-premium\">
                 <div className="flex gap-2.5 items-start">
                   <div className="w-6 h-6 rounded bg-zinc-850 flex items-center justify-center text-[10px] font-mono font-semibold">U</div>
                   <div className="bg-zinc-900/50 px-3 py-2 rounded-lg text-xs leading-relaxed max-w-[85%]">

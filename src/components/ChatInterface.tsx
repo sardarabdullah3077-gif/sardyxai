@@ -682,7 +682,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             </button>
 
             {/* Sessions Scroll List */}
-            <div className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
+            <div className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1 scrollbar-premium">
               <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest pl-1">Chats Inventory</span>
               
               {sessions.length === 0 && (
@@ -821,7 +821,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         </header>
 
         {/* MESSAGES LOG CONSOLE */}
-        <section id="chat-messages-scroll" className="flex-1 overflow-y-auto px-6 py-8 space-y-6 relative z-0">
+        <section id="chat-messages-scroll" className="flex-1 overflow-y-auto px-6 py-8 space-y-6 relative z-0 scrollbar-premium scroll-smooth">
           
           {/* Guest message limits notification banner */}
           {!user && guestCount >= 1 && (

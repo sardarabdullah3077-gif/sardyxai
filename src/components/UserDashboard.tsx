@@ -112,7 +112,7 @@ export default function UserDashboard({ user, onClose, userToken }: UserDashboar
   };
 
   return (
-    <div id="user-dashboard-root" className="fixed inset-0 z-40 bg-[#050505]/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div id="user-dashboard-root" className="fixed inset-0 z-40 bg-[#050505]/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto scrollbar-light">
       <div 
         onClick={(e) => e.stopPropagation()} 
         className="w-full max-w-3xl rounded-3xl bg-[#0a0a0a] border border-white/10 shadow-2xl overflow-hidden text-zinc-100 flex flex-col md:flex-row h-full max-h-[600px]"
@@ -169,7 +169,7 @@ export default function UserDashboard({ user, onClose, userToken }: UserDashboar
         </div>
 
         {/* Right Tab Contents */}
-        <div className="flex-1 p-6 flex flex-col justify-between overflow-y-auto bg-[#0a0a0a]">
+        <div className="flex-1 p-6 flex flex-col justify-between overflow-y-auto bg-[#0a0a0a] scrollbar-premium">
           <div className="space-y-6">
             {/* Header titles */}
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
@@ -248,7 +248,7 @@ export default function UserDashboard({ user, onClose, userToken }: UserDashboar
               </form>
 
               {/* Memories List */}
-              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 scrollbar-premium">
                 {memories.length === 0 ? (
                   <div className="p-4 rounded-2xl bg-white/[0.01] text-center text-xs text-zinc-550 font-light flex items-center justify-center gap-2 border border-dashed border-white/5">
                     <Info className="w-4 h-4 text-zinc-600" />

@@ -115,7 +115,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
   };
 
   return (
-    <div id="auth-modal-root" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050505]/95 backdrop-blur-md overflow-y-auto animate-fade-in">
+    <div id="auth-modal-root" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050505]/95 backdrop-blur-md overflow-y-auto animate-fade-in scrollbar-light\">
       <div 
         onClick={(e) => e.stopPropagation()} 
         className="relative w-full max-w-sm p-8 my-8 rounded-3xl bg-[#0a0a0a] border border-white/10 shadow-2xl text-center overflow-visible"

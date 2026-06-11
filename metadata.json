@@ -1,0 +1,6 @@
+{
+  "name": "SARDYX AI",
+  "description": "Premium multi-model AI agent and cognitive assistant platform with unified routing, autonomous agent workflows, document analysis, and dynamic media generation. Created by Sardar Abdullah Fazal.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

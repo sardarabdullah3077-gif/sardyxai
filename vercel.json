@@ -1,4 +1,6 @@
 {
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
   "version": 2,
   "rewrites": [
     {
@@ -6,8 +8,19 @@
       "destination": "/api/index.ts"
     },
     {
-      "source": "/((?!api).*)" ,
+      "source": "/((?!api|_next|static|.*\\.\\w+$).*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
     }
   ]
 }

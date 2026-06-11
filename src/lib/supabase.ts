@@ -16,11 +16,7 @@ import path from "path";
 // ---------------------------------------------------------------------------
 // Lazy Supabase client — created once on first use, AFTER dotenv loads
 // ---------------------------------------------------------------------------
-let _supabase: SupabaseClient | null | undefined = undefined; // undefined = not yet checked
-
 export function getSupabaseClient(): SupabaseClient | null {
-  if (_supabase !== undefined) return _supabase;
-
   const supabaseUrl = process.env.SUPABASE_URL || "";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -28,17 +24,11 @@ export function getSupabaseClient(): SupabaseClient | null {
     "";
 
   if (supabaseUrl && supabaseKey) {
-    _supabase = createClient(supabaseUrl, supabaseKey, {
+    return createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    console.log("[DATABASE] Supabase client initialised successfully.");
-  } else {
-    _supabase = null;
-    console.log(
-      "[DATABASE] Supabase env vars missing – using local JSON fallback."
-    );
   }
-  return _supabase;
+  return null;
 }
 
 // Keep a named export for legacy callers

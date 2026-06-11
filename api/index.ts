@@ -15,15 +15,11 @@ const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// ── Lazy Supabase client ─────────────────────────────────────────────────────
-let _sb: ReturnType<typeof createClient> | null | undefined;
+// ── Supabase client generator (Fresh instance per request to avoid auth state pollution) ──
 function sb() {
-  if (_sb !== undefined) return _sb;
   const url = process.env.SUPABASE_URL || "";
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "";
-  _sb = url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
-  console.log(_sb ? "[DB] Supabase ready" : "[DB] No Supabase — local fallback");
-  return _sb;
+  return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 
 // ── URL normaliser ────────────────────────────────────────────────────────────

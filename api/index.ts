@@ -298,26 +298,44 @@ app.post("/api/security/check-guest-limit", (req: Request, res: Response) => {
 // Chat endpoints
 app.post("/api/chats/:id/messages", (req: Request, res: Response) => {
   try {
-    const { message } = req.body;
+    const { message, guestToken, modelMode } = req.body;
     
-    if (!message || typeof message.content !== "string") {
+    if (!message) {
+      return res.status(400).json({ error: "Message object is required" });
+    }
+
+    if (!message.content || typeof message.content !== "string") {
       return res.status(400).json({ error: "Message content is required" });
     }
 
+    if (!message.content.trim()) {
+      return res.status(400).json({ error: "Message cannot be empty" });
+    }
+
+    console.log(`[CHAT] Processing message from user: "${message.content.substring(0, 50)}..."`);
+
+    // Simulate AI response
     const botMessage = {
       id: `msg-${Date.now()}-bot`,
       role: "assistant",
-      content: `I received your message: "${message.content.substring(0, 50)}..."`,
+      content: `I received and processed your message: "${message.content.substring(0, 100)}". This is a sandbox response. Integrate with your preferred LLM API (OpenAI, Claude, Gemini, etc.) to get real responses.`,
       timestamp: new Date().toISOString(),
-      modelUsed: "gpt-3.5-turbo",
+      modelUsed: modelMode || "sandbox",
+      thoughts: ["Parsed user intent", "Generated appropriate response"]
     };
+
+    console.log(`[CHAT] Sending bot response: "${botMessage.content.substring(0, 50)}..."`);
 
     res.json({
       message: botMessage,
+      session: null, // No session updates for sandbox
     });
   } catch (err: any) {
     console.error("[CHAT] Error:", err);
-    res.status(500).json({ error: "Chat processing failed", message: err.message });
+    res.status(500).json({ 
+      error: "Chat processing failed", 
+      message: err.message || "Unable to process message" 
+    });
   }
 });
 

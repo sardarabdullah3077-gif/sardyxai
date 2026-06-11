@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import sardyxLogo from '../assets/images/sardyx_sa_emblem_1781174395689.png';
 import { 
   Bot, 
   Send, 
@@ -632,9 +633,12 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             {/* Header Identity */}
             <div className="flex items-center justify-between border-b border-white/5 pb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/15 shrink-0">
-                  <span className="text-black font-extrabold text-xs">S</span>
-                </div>
+                <img 
+                  src={sardyxLogo} 
+                  alt="SARDYX AI Premium" 
+                  className="w-10 h-10 rounded-xl object-contain shrink-0 shadow-lg shadow-indigo-500/20 border border-white/10 p-0.5 bg-black animate-[pulse_4s_infinite]"
+                  referrerPolicy="no-referrer"
+                />
                 <span className="text-sm font-bold tracking-tight text-white">SARDYX <span className="text-indigo-400">AI</span></span>
               </div>
               <button 
@@ -833,9 +837,12 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                 }`}
               >
                 {msg.role !== 'user' && (
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center text-black font-extrabold shrink-0 shadow-lg shadow-indigo-500/10">
-                    S
-                  </div>
+                  <img 
+                    src={sardyxLogo} 
+                    alt="SARDYX AI" 
+                    className="w-9 h-9 rounded-xl object-contain shrink-0 shadow-md shadow-indigo-500/15 border border-white/5 p-0.5 bg-black animate-[pulse_3s_infinite]"
+                    referrerPolicy="no-referrer"
+                  />
                 )}
 
                 <div className={`p-5 rounded-2xl border flex flex-col justify-between gap-1.5 leading-relaxed text-xs sm:text-sm max-w-[85%] relative group ${
@@ -973,9 +980,12 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             {/* Waiting loader feedback details */}
             {loading && (
               <div className="flex gap-4 items-start animate-pulse">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center text-black font-extrabold shrink-0">
-                  S
-                </div>
+                <img 
+                  src={sardyxLogo} 
+                  alt="SARDYX AI" 
+                  className="w-9 h-9 rounded-xl object-contain shrink-0 border border-white/5 p-0.5 bg-black animate-[spin_10s_linear_infinite]"
+                  referrerPolicy="no-referrer"
+                />
                 <div className="p-5 rounded-2xl border bg-[#0a0a0a] border-white/5 text-zinc-300 max-w-[85%] space-y-2 w-full">
                   <div className="flex items-center gap-2 font-mono text-[10px] text-indigo-400">
                     <Workflow className="w-3.5 h-3.5 animate-spin text-indigo-400" />

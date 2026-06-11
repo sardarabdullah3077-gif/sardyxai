@@ -7,6 +7,23 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let supabaseInstance: SupabaseClient | null = null;
 let configPromise: Promise<SupabaseClient> | null = null;
+let cachedConfig: { supabaseUrl?: string; supabaseAnonKey?: string; isPlaceholder?: boolean } | null = null;
+
+export async function getSupabaseConfig(): Promise<{ supabaseUrl?: string; supabaseAnonKey?: string; isPlaceholder: boolean }> {
+  if (cachedConfig) return cachedConfig as any;
+  try {
+    const response = await fetch('/api/config/supabase');
+    if (!response.ok) {
+      return { isPlaceholder: true };
+    }
+    const data = await response.json();
+    cachedConfig = data;
+    return data;
+  } catch (err) {
+    console.error('Failed to resolve Supabase Config:', err);
+    return { isPlaceholder: true };
+  }
+}
 
 export async function getSupabase(): Promise<SupabaseClient> {
   if (supabaseInstance) return supabaseInstance;
@@ -15,16 +32,11 @@ export async function getSupabase(): Promise<SupabaseClient> {
 
   configPromise = (async () => {
     try {
-      const response = await fetch('/api/config/supabase');
-      if (!response.ok) {
-        throw new Error('Supabase client-side settings missing or backend offline.');
-      }
-      const data = await response.json();
-      const { supabaseUrl, supabaseAnonKey } = data;
-
-      let activeUrl = supabaseUrl;
-      let activeKey = supabaseAnonKey;
-      if (!activeUrl || !activeKey || activeUrl.includes('your-project')) {
+      const config = await getSupabaseConfig();
+      let activeUrl = config.supabaseUrl;
+      let activeKey = config.supabaseAnonKey;
+      
+      if (!activeUrl || !activeKey || config.isPlaceholder) {
         console.warn('Supabase lies in placeholder state. Please configure real credential keys through Settings tab.');
         activeUrl = 'https://placeholder.supabase.co';
         activeKey = 'placeholder';
@@ -34,7 +46,6 @@ export async function getSupabase(): Promise<SupabaseClient> {
       return supabaseInstance;
     } catch (err) {
       console.error('Failed to initialize Supabase client:', err);
-      // Fallback placeholder client to prevent application lockup
       supabaseInstance = createClient('https://placeholder.supabase.co', 'placeholder');
       return supabaseInstance;
     }

@@ -5,7 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Sparkles, AlertCircle, ShieldCheck, Loader2, Mail, Lock, User, ArrowRight, CheckCircle2 } from 'lucide-react';
-import { getSupabase } from '../lib/supabase';
+import { getSupabase, getSupabaseConfig } from '../lib/supabase';
+import sardyxLogo from '../assets/images/sardyx_sa_emblem_1781174395689.png';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -117,91 +118,141 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
     setSuccess('');
 
     try {
-      const supabase = await getSupabase();
-      
-      if (authMode === 'signup') {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              name: fullName,
-              full_name: fullName,
-            }
-          }
-        });
+      const config = await getSupabaseConfig();
 
-        if (signUpError) throw signUpError;
-
-        if (data.user && data.session) {
-          const user = data.user;
-          const session = data.session;
-          const userEmail = user.email || '';
-          const name = user.user_metadata?.name || fullName || userEmail.split('@')[0];
-          const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(userEmail)}`;
-
-          await fetch('/api/auth/login', {
+      if (config.isPlaceholder) {
+        // Fallback local JSON database auth flow
+        if (authMode === 'signup') {
+          const response = await fetch('/api/auth/local-signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: userEmail,
-              name,
-              avatarUrl,
-              id: user.id
-            }),
+            body: JSON.stringify({ email, password, fullName }),
           });
 
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to complete direct local registration.');
+          }
+
           onLoginSuccess(
-            userEmail,
-            name,
-            avatarUrl,
-            user.id,
-            session.access_token,
-            session.refresh_token
+            data.user.email,
+            data.user.name,
+            data.user.avatarUrl,
+            data.user.id,
+            '', // Local token acts as bypass
+            ''
           );
           onClose();
         } else {
-          setSuccess('Account registered successfully! If you have email verification enabled in your Supabase dashboard, please verify your email and sign in below. Otherwise, try to sign in directly.');
-          setAuthMode('signin');
-          setPassword('');
+          const response = await fetch('/api/auth/local-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to complete direct local authentication.');
+          }
+
+          onLoginSuccess(
+            data.user.email,
+            data.user.name,
+            data.user.avatarUrl,
+            data.user.id,
+            '', // Local token acts as bypass
+            ''
+          );
+          onClose();
         }
       } else {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-
-        if (signInError) throw signInError;
-
-        if (data.user && data.session) {
-          const user = data.user;
-          const session = data.session;
-          const userEmail = user.email || '';
-          const name = user.user_metadata?.name || user.user_metadata?.full_name || userEmail.split('@')[0];
-          const avatarUrl = user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(userEmail)}`;
-
-          await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: userEmail,
-              name,
-              avatarUrl,
-              id: user.id
-            }),
+        // Standard Supabase authentication flow
+        const supabase = await getSupabase();
+        
+        if (authMode === 'signup') {
+          const { data, error: signUpError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                name: fullName,
+                full_name: fullName,
+              }
+            }
           });
 
-          onLoginSuccess(
-            userEmail,
-            name,
-            avatarUrl,
-            user.id,
-            session.access_token,
-            session.refresh_token
-          );
-          onClose();
+          if (signUpError) throw signUpError;
+
+          if (data.user && data.session) {
+            const user = data.user;
+            const session = data.session;
+            const userEmail = user.email || '';
+            const name = user.user_metadata?.name || fullName || userEmail.split('@')[0];
+            const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(userEmail)}`;
+
+            await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: userEmail,
+                name,
+                avatarUrl,
+                id: user.id
+              }),
+            });
+
+            onLoginSuccess(
+              userEmail,
+              name,
+              avatarUrl,
+              user.id,
+              session.access_token,
+              session.refresh_token
+            );
+            onClose();
+          } else {
+            setSuccess('Account registered successfully! If you have email verification enabled in your Supabase dashboard, please verify your email and sign in below. Otherwise, try to sign in directly.');
+            setAuthMode('signin');
+            setPassword('');
+          }
         } else {
-          throw new Error('Supabase did not establish an active session frame.');
+          const { data, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+
+          if (signInError) throw signInError;
+
+          if (data.user && data.session) {
+            const user = data.user;
+            const session = data.session;
+            const userEmail = user.email || '';
+            const name = user.user_metadata?.name || user.user_metadata?.full_name || userEmail.split('@')[0];
+            const avatarUrl = user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(userEmail)}`;
+
+            await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: userEmail,
+                name,
+                avatarUrl,
+                id: user.id
+              }),
+            });
+
+            onLoginSuccess(
+              userEmail,
+              name,
+              avatarUrl,
+              user.id,
+              session.access_token,
+              session.refresh_token
+            );
+            onClose();
+          } else {
+            throw new Error('Supabase did not establish an active session frame.');
+          }
         }
       }
     } catch (err: any) {
@@ -223,9 +274,12 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
 
         {/* Brand visual header */}
         <div className="relative z-10 mb-6 mt-2">
-          <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-550/15 mx-auto mb-4 animate-pulse">
-            <span className="text-black font-black text-xl tracking-tighter">S</span>
-          </div>
+          <img 
+            src={sardyxLogo} 
+            alt="SARDYX AI Premium Logo" 
+            className="w-14 h-14 rounded-2xl object-cover shadow-xl shadow-indigo-550/15 mx-auto mb-4 animate-pulse"
+            referrerPolicy="no-referrer"
+          />
           <h2 className="text-2xl font-bold tracking-tight text-white mb-2">
             {authMode === 'signin' ? 'Sign In' : 'Sign Up'} / SARDYX Core
           </h2>

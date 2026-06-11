@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
+import sardyxLogo from '../assets/images/sardyx_sa_emblem_1781174395689.png';
 import { 
   Bot, 
   MessageSquare, 
@@ -160,9 +161,27 @@ export default function LandingPage({ onStartSession, onOpenAuth, isAuthenticate
       {/* HEADER Nav */}
       <header id="landing-header" className="relative z-10 max-w-7xl mx-auto px-8 py-5 flex items-center justify-between border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur-md sticky top-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <span className="text-black font-black text-xs">S</span>
-          </div>
+          <motion.img 
+            src={sardyxLogo} 
+            alt="SARDYX AI Premium Logo" 
+            className="w-11 h-11 rounded-xl object-contain shadow-xl cursor-pointer border border-white/10 p-0.5 bg-black"
+            referrerPolicy="no-referrer"
+            animate={{ 
+              scale: [1, 1.04, 1],
+              rotate: [0, 1.5, -1.5, 0],
+              boxShadow: [
+                "0 4px 20px rgba(99, 102, 241, 0.2)",
+                "0 4px 30px rgba(99, 102, 241, 0.4)",
+                "0 4px 20px rgba(99, 102, 241, 0.2)"
+              ]
+            }}
+            transition={{ 
+              duration: 4, 
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            whileHover={{ scale: 1.12, rotate: 6 }}
+          />
           <span className="text-xl font-bold tracking-tight text-white">
             SARDYX <span className="text-indigo-400">AI</span>
           </span>
@@ -465,7 +484,12 @@ export default function LandingPage({ onStartSession, onOpenAuth, isAuthenticate
       <footer id="landing-footer" className="relative z-10 max-w-7xl mx-auto px-6 py-12 border-t border-white/5 mt-16 text-zinc-500 text-xs text-center space-y-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-zinc-400 font-medium">
-            <div className="w-5 h-5 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded flex items-center justify-center text-[8px] text-black font-bold">S</div>
+            <img 
+              src={sardyxLogo} 
+              alt="SARDYX AI Mini Logo" 
+              className="w-5 h-5 rounded object-contain"
+              referrerPolicy="no-referrer"
+            />
             <span>SARDYX AI System</span>
           </div>
           <p className="text-zinc-400">

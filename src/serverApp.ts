@@ -149,11 +149,103 @@ const getAvailableFreeLlmModels = async (baseUrl: string, key: string): Promise<
 
 // --- AUTHENTICATION ENDPOINTS (SUPABASE INTEGRATION) ---
 
-// Expose public Supabase credentials securely to client
+// Expose public Supabase credentials securely to client with validation checks
 app.get(["/api/config/supabase", "/config/supabase"], (req, res) => {
+  const url = process.env.SUPABASE_URL || "";
+  const key = process.env.SUPABASE_ANON_KEY || "";
+  const isPlaceholder = !url || !key || url.includes("placeholder") || url.includes("your-project") || url === "";
   res.json({
-    supabaseUrl: process.env.SUPABASE_URL || "",
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
+    supabaseUrl: url,
+    supabaseAnonKey: key,
+    isPlaceholder
+  });
+});
+
+// Direct Local Register Endpoint (for offline sandbox fallback)
+app.post(["/api/auth/local-signup", "/auth/local-signup"], (req, res) => {
+  const { email, password, fullName } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required credentials." });
+  }
+  
+  const emailLower = email.toLowerCase().trim();
+  const db = getDB();
+  
+  if (db.users[emailLower]) {
+    return res.status(400).json({ error: "An account with this email address already exists. Please sign in instead." });
+  }
+
+  const userId = `usr-local-${Date.now()}`;
+  const name = fullName || emailLower.split("@")[0];
+  const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`;
+
+  const newUser = {
+    id: userId,
+    email: emailLower,
+    name,
+    role: "user",
+    createdAt: new Date().toISOString(),
+    avatarUrl,
+    password, // Store as local sandbox credentials
+  };
+
+  db.users[emailLower] = newUser;
+  saveDB(db);
+
+  addAuditLog("auth", `Local sandbox account registered: ${emailLower}`, emailLower, getClientIp(req));
+
+  res.json({
+    user: {
+      id: userId,
+      email: emailLower,
+      name,
+      role: "user",
+      createdAt: newUser.createdAt,
+      avatarUrl,
+    },
+    token: emailLower,
+  });
+});
+
+// Direct Local Login Endpoint (for offline sandbox fallback)
+app.post(["/api/auth/local-login", "/auth/local-login"], (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required credentials." });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const db = getDB();
+  const user = db.users[emailLower];
+
+  if (!user) {
+    return res.status(400).json({ error: "Account not found or password mismatched in local database." });
+  }
+
+  // Handle password matching if password exists or prompt sync
+  if (user.password && user.password !== password) {
+    return res.status(400).json({ error: "Incorrect password for this user context." });
+  }
+
+  // Set password if logging into prefilled template admin accounts
+  if (!user.password) {
+    user.password = password;
+    db.users[emailLower] = user;
+    saveDB(db);
+  }
+
+  addAuditLog("auth", `Local sandbox account authenticated: ${emailLower}`, emailLower, getClientIp(req));
+
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      createdAt: user.createdAt,
+      avatarUrl: user.avatarUrl,
+    },
+    token: emailLower,
   });
 });
 

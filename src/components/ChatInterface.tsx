@@ -456,13 +456,15 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         headers['Authorization'] = `Bearer ${user.email}`;
       }
 
+      const customInstructions = localStorage.getItem(`sardyx_inst_${user?.email || 'guest'}`) || undefined;
       const response = await fetch(`/api/chats/${activeSession?.id || 'sandbox'}/messages`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           message: userMsg,
           guestToken,
-          modelMode: selectedModelMode
+          modelMode: selectedModelMode,
+          customInstructions
         }),
       });
 
@@ -539,13 +541,15 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         headers['Authorization'] = `Bearer ${user.email}`;
       }
 
+      const customInstructions = localStorage.getItem(`sardyx_inst_${user?.email || 'guest'}`) || undefined;
       const response = await fetch(`/api/chats/${activeSession.id}/messages`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           message: lastUserMsg,
           guestToken,
-          modelMode: selectedModelMode
+          modelMode: selectedModelMode,
+          customInstructions
         }),
       });
 

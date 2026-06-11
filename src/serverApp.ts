@@ -8,6 +8,21 @@ import path from "path";
 import fs from "fs";
 import * as dotenv from "dotenv";
 import chatRouter from "./api/chat";
+import {
+  supabase,
+  getLocalDB,
+  saveLocalDB,
+  dbSignUp,
+  dbSignIn,
+  dbGetUserProfile,
+  dbGetSessions,
+  dbCreateSession,
+  dbUpdateSession,
+  dbDeleteSession,
+  dbGetMemories,
+  dbCreateMemory,
+  dbDeleteMemory,
+} from "./lib/supabase";
 
 // Load environment variables from .env.local or .env
 const envPath = path.resolve(process.cwd(), process.env.NODE_ENV === 'production' ? '.env' : '.env.local');
@@ -31,7 +46,6 @@ app.get(['/health', '/api/health'], (req, res) => {
 // Quick test endpoint
 app.post(['/api/test/chat', '/test/chat'], (req, res) => {
   console.log('[TEST ENDPOINT] POST /api/test/chat called successfully');
-  console.log('[TEST ENDPOINT] Request body:', JSON.stringify(req.body).substring(0, 200));
   res.json({ 
     message: 'Test endpoint working!',
     receivedBody: req.body,
@@ -39,105 +53,32 @@ app.post(['/api/test/chat', '/test/chat'], (req, res) => {
   });
 });
 
-// Set up server-side data paths
-const isVercel = process.env.VERCEL === "1" || !!process.env.VERCEL;
-const DATA_DIR = isVercel ? "/tmp" : path.join(process.cwd(), "db_data");
-try {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-} catch (err) {
-  console.error("Failed to create DATA_DIR under serverApp.ts startup:", err);
-}
-const DB_FILE = path.join(DATA_DIR, "database.json");
-
-// Initialize JSON Database
-interface DBStructure {
-  users: { [key: string]: any };
-  sessions: any[];
-  memories: any[];
-  auditLogs: any[];
-  guestTokens: { [key: string]: number }; // Tracks message count per fingerprint/cookie/IP
-  systemMetrics: {
-    requestsTotal: number;
-    apiLatencyMs: number;
-    rateLimitHits: number;
-    freeLlmCalls: number;
-  };
-}
-
-const defaultDB: DBStructure = {
-  users: {
-    // Default account matching user's email
-    "sardarabdullah3077@gmail.com": {
-      id: "admin-id-1",
-      email: "sardarabdullah3077@gmail.com",
-      name: "Sardar Abdullah Fazal",
-      role: "user",
-      createdAt: new Date().toISOString(),
-      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150&q=80",
-    },
-  },
-  sessions: [],
-  memories: [],
-  auditLogs: [
-    {
-      id: "log-1",
-      timestamp: new Date().toISOString(),
-      type: "info",
-      message: "SARDYX AI central core booted successfully by Sardar Abdullah Fazal",
-      details: "Initial schema initialized.",
-    },
-  ],
-  guestTokens: {},
-  systemMetrics: {
-    requestsTotal: 0,
-    apiLatencyMs: 140,
-    rateLimitHits: 0,
-    freeLlmCalls: 0,
-  },
-};
-
-const getDB = (): DBStructure => {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const content = fs.readFileSync(DB_FILE, "utf-8");
-      return JSON.parse(content);
-    }
-  } catch (err) {
-    console.error("Error reading database file, resetting defaults:", err);
-  }
-  saveDB(defaultDB);
-  return defaultDB;
-};
-
-const saveDB = (data: DBStructure) => {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Error writing database file:", err);
-  }
-};
+// Local DB metrics usage helpers
+const getDB = getLocalDB;
+const saveDB = saveLocalDB;
 
 const addAuditLog = (type: string, message: string, userEmail?: string, ip?: string, details?: string) => {
-  const db = getDB();
-  db.auditLogs.unshift({
-    id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-    timestamp: new Date().toISOString(),
-    type,
-    message,
-    userEmail,
-    ipAddress: ip || "127.0.0.1",
-    details,
-  });
-  // Cap logs to 200
-  if (db.auditLogs.length > 200) {
-    db.auditLogs = db.auditLogs.slice(0, 200);
+  try {
+    const db = getDB();
+    db.auditLogs.unshift({
+      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: new Date().toISOString(),
+      type,
+      message,
+      userEmail,
+      ipAddress: ip || "127.0.0.1",
+      details,
+    });
+    // Cap logs to 200
+    if (db.auditLogs.length > 200) {
+      db.auditLogs = db.auditLogs.slice(0, 200);
+    }
+    saveDB(db);
+  } catch (err) {
+    console.error("Failed to add audit log:", err);
   }
-  saveDB(db);
 };
 
-// Express configuration is at the top of the file with body parsers
 // Register custom self-hosted LLM proxy route
 app.use(["/api/chat", "/chat"], chatRouter);
 
@@ -149,8 +90,13 @@ const getClientIp = (req: express.Request) => {
 // Helper to fetch list of models dynamically from FreeLLMAPI
 const getAvailableFreeLlmModels = async (baseUrl: string, key: string): Promise<string[]> => {
   try {
-    const sanitizedUrl = baseUrl.replace(/\/$/, "");
+    let sanitizedUrl = baseUrl.trim().replace(/\/$/, "");
+    if (sanitizedUrl.endsWith("/v1r")) {
+      sanitizedUrl = sanitizedUrl.slice(0, -1); // remove trailing 'r' typo
+    }
     const normalizedUrl = sanitizedUrl.endsWith("/v1") ? sanitizedUrl.slice(0, -3) : sanitizedUrl;
+    
+    console.log(`[FREE_LLM_API] Retrieving model list from: ${normalizedUrl}/v1/models`);
     const res = await fetch(`${normalizedUrl}/v1/models`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${key}` },
@@ -160,6 +106,9 @@ const getAvailableFreeLlmModels = async (baseUrl: string, key: string): Promise<
       if (data && data.data && Array.isArray(data.data)) {
         return data.data.map((m: any) => m.id);
       }
+    } else {
+      const errorText = await res.text();
+      console.error(`[FREE_LLM_API] Failed to retrieve model list. Status: ${res.status}, Error: ${errorText}`);
     }
   } catch (err: any) {
     console.error("[FREE_LLM_API] Failed to retrieve model list:", err.message);
@@ -167,158 +116,97 @@ const getAvailableFreeLlmModels = async (baseUrl: string, key: string): Promise<
   return [];
 };
 
-// --- AUTHENTICATION ENDPOINTS (EMAIL/PASSWORD ONLY) ---
+// --- AUTHENTICATION ENDPOINTS (SUPABASE / LOCAL FALLBACK) ---
 
-// Direct Local Register Endpoint
-app.post(["/api/auth/local-signup", "/auth/local-signup"], (req, res) => {
+// Register Endpoint
+app.post(["/api/auth/local-signup", "/auth/local-signup"], async (req, res) => {
   console.log("[AUTH] POST /api/auth/local-signup - Received request");
   try {
-    const { email, password, fullName } = req.body;
+    const { email, password, fullName, name } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required credentials." });
     }
     
-    const emailLower = email.toLowerCase().trim();
-    const db = getDB();
-    
-    if (db.users[emailLower]) {
-      return res.status(400).json({ error: "An account with this email address already exists. Please sign in instead." });
-    }
+    const displayName = name || fullName || email.split("@")[0];
+    const user = await dbSignUp(email, password, displayName);
 
-    const userId = `usr-local-${Date.now()}`;
-    const name = fullName || emailLower.split("@")[0];
-    const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`;
-
-    const newUser = {
-      id: userId,
-      email: emailLower,
-      name,
-      role: "user",
-      createdAt: new Date().toISOString(),
-      avatarUrl,
-      password, // Store as local sandbox credentials
-    };
-
-    db.users[emailLower] = newUser;
-    saveDB(db);
-
-    addAuditLog("auth", `Local sandbox account registered: ${emailLower}`, emailLower, getClientIp(req));
+    addAuditLog("auth", `Account registered successfully: ${user.email}`, user.email, getClientIp(req));
 
     res.json({
-      user: {
-        id: userId,
-        email: emailLower,
-        name,
-        role: "user",
-        createdAt: newUser.createdAt,
-        avatarUrl,
-      },
-      token: emailLower,
+      user,
+      token: user.email,
     });
   } catch (err: any) {
-    console.error("[AUTH] Local signup error:", err);
-    res.status(500).json({ error: "Signup failed", message: err.message || "Failed to create account" });
+    console.error("[AUTH] Signup error:", err);
+    res.status(400).json({ error: err.message || "Signup failed" });
   }
 });
 
-// Direct Local Login Endpoint (for offline sandbox fallback)
-app.post(["/api/auth/local-login", "/auth/local-login"], (req, res) => {
+// Login Endpoint
+app.post(["/api/auth/local-login", "/auth/local-login"], async (req, res) => {
+  console.log("[AUTH] POST /api/auth/local-login - Received request");
   try {
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required credentials." });
     }
 
-    const emailLower = email.toLowerCase().trim();
-    const db = getDB();
-    const user = db.users[emailLower];
+    const user = await dbSignIn(email, password);
 
-    if (!user) {
-      return res.status(400).json({ error: "Account not found or password mismatched in local database." });
-    }
-
-    // Handle password matching if password exists or prompt sync
-    if (user.password && user.password !== password) {
-      return res.status(400).json({ error: "Incorrect password for this user context." });
-    }
-
-    // Set password if logging into prefilled template admin accounts
-    if (!user.password) {
-      user.password = password;
-      db.users[emailLower] = user;
-      saveDB(db);
-    }
-
-    addAuditLog("auth", `Local sandbox account authenticated: ${emailLower}`, emailLower, getClientIp(req));
+    addAuditLog("auth", `Account authenticated successfully: ${user.email}`, user.email, getClientIp(req));
 
     res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        createdAt: user.createdAt,
-        avatarUrl: user.avatarUrl,
-      },
-      token: emailLower,
+      user,
+      token: user.email,
     });
   } catch (err: any) {
-    console.error("[AUTH] Local login error:", err);
-    res.status(500).json({ error: "Login failed", message: err.message || "Failed to authenticate" });
+    console.error("[AUTH] Login error:", err);
+    res.status(400).json({ error: err.message || "Login failed" });
   }
 });
 
-
-// Chat endpoints and other functionality follows...
-app.get(["/api/auth/session", "/auth/session"], (req, res) => {
+// Session endpoint
+app.get(["/api/auth/session", "/auth/session"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.json({ session: null });
   }
 
   const email = authHeader.replace("Bearer ", "").trim();
-  const db = getDB();
-  const user = db.users[email];
-
-  if (user) {
-    return res.json({ session: { user } });
+  try {
+    const user = await dbGetUserProfile(email);
+    if (user) {
+      return res.json({ session: { user } });
+    }
+  } catch (err) {
+    console.error("[AUTH] Session sync error:", err);
   }
   return res.json({ session: null });
 });
 
 // Synced login route to record dynamic profiles generated from Google OAuth metadata
-app.post(["/api/auth/login", "/auth/login"], (req, res) => {
+app.post(["/api/auth/login", "/auth/login"], async (req, res) => {
   try {
     const { email, name, avatarUrl, id } = req.body;
     if (!email) {
       return res.status(400).json({ error: "Email is required." });
     }
 
-    const db = getDB();
-    let user = db.users[email];
+    const emailLower = email.toLowerCase().trim();
+    const displayName = name || emailLower.split("@")[0];
+    const avatar = avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`;
 
-    if (!user) {
-      user = {
-        id: id || `usr-${Date.now()}`,
-        email,
-        name: name || email.split("@")[0],
-        role: "user",
-        createdAt: new Date().toISOString(),
-        avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
-      };
-      db.users[email] = user;
-      saveDB(db);
-      addAuditLog("auth", `Profile initialized via Google OAuth syncing: ${email}`, email, getClientIp(req));
-    } else {
-      if (name) user.name = name;
-      if (avatarUrl) user.avatarUrl = avatarUrl;
-      if (id) user.id = id;
-      db.users[email] = user;
-      saveDB(db);
-      addAuditLog("auth", `Profile updated and logged in: ${email}`, email, getClientIp(req));
-    }
+    const user = {
+      id: id || `usr-${Date.now()}`,
+      email: emailLower,
+      name: displayName,
+      role: "user",
+      createdAt: new Date().toISOString(),
+      avatarUrl: avatar,
+    };
 
-    res.json({ user, token: email });
+    addAuditLog("auth", `Profile synced: ${emailLower}`, emailLower, getClientIp(req));
+    res.json({ user, token: emailLower });
   } catch (err: any) {
     console.error("[AUTH] Login profile sync error:", err);
     res.status(500).json({ error: "Login sync failed", message: err.message || "Failed to sync profile" });
@@ -334,20 +222,22 @@ app.post(["/api/auth/logout", "/auth/logout"], (req, res) => {
 
 // --- USER PERSISTED MEMORIES ENDPOINTS ---
 
-app.get(["/api/memory", "/memory"], (req, res) => {
+app.get(["/api/memory", "/memory"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   const email = authHeader.replace("Bearer ", "").trim();
-  const db = getDB();
-  
-  // Filter memory for user
-  const userMemories = db.memories.filter(m => m.userEmail === email);
-  res.json(userMemories);
+  try {
+    const userMemories = await dbGetMemories(email);
+    res.json(userMemories);
+  } catch (err: any) {
+    console.error("[MEMORY] Fetch error:", err);
+    res.status(500).json({ error: "Failed to retrieve memories" });
+  }
 });
 
-app.post(["/api/memory", "/memory"], (req, res) => {
+app.post(["/api/memory", "/memory"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -359,25 +249,18 @@ app.post(["/api/memory", "/memory"], (req, res) => {
     return res.status(400).json({ error: "Key and content are required" });
   }
 
-  const db = getDB();
-
-  // Create memory entry
-  const newMemory = {
-    id: `mem-${Date.now()}`,
-    userEmail: email,
-    key,
-    content,
-    createdAt: new Date().toISOString(),
-  };
-
-  db.memories.push(newMemory);
-  saveDB(db);
-
-  addAuditLog("chat", `Created user memory note [${key}]`, email, getClientIp(req));
-  res.json(newMemory);
+  const memoryId = `mem-${Date.now()}`;
+  try {
+    const newMemory = await dbCreateMemory(memoryId, email, key, content);
+    addAuditLog("chat", `Created user memory note [${key}]`, email, getClientIp(req));
+    res.json(newMemory);
+  } catch (err: any) {
+    console.error("[MEMORY] Create error:", err);
+    res.status(500).json({ error: "Failed to store memory" });
+  }
 });
 
-app.delete(["/api/memory/:id", "/memory/:id"], (req, res) => {
+app.delete(["/api/memory/:id", "/memory/:id"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -385,61 +268,52 @@ app.delete(["/api/memory/:id", "/memory/:id"], (req, res) => {
   const email = authHeader.replace("Bearer ", "").trim();
   const id = req.params.id;
 
-  const db = getDB();
-  const index = db.memories.findIndex(m => m.id === id && m.userEmail === email);
-
-  if (index !== -1) {
-    db.memories.splice(index, 1);
-    saveDB(db);
+  try {
+    await dbDeleteMemory(id, email);
     addAuditLog("chat", `Deleted user memory note`, email, getClientIp(req));
     res.json({ success: true });
-  } else {
-    res.status(404).json({ error: "Memory item not found" });
+  } catch (err: any) {
+    console.error("[MEMORY] Delete error:", err);
+    res.status(500).json({ error: "Failed to delete memory item" });
   }
 });
 
 // --- CHAT SESSION ENDPOINTS ---
 
-app.get(["/api/chats", "/chats"], (req, res) => {
+app.get(["/api/chats", "/chats"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    // Return empty array for anonymous guests
     return res.json([]);
   }
   const email = authHeader.replace("Bearer ", "").trim();
-  const db = getDB();
-
-  const userChats = db.sessions.filter(s => s.userEmail === email);
-  res.json(userChats);
+  try {
+    const userChats = await dbGetSessions(email);
+    res.json(userChats);
+  } catch (err: any) {
+    console.error("[CHATS] Fetch error:", err);
+    res.status(500).json({ error: "Failed to load chats" });
+  }
 });
 
-app.post(["/api/chats", "/chats"], (req, res) => {
+app.post(["/api/chats", "/chats"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized for chat saving" });
   }
   const email = authHeader.replace("Bearer ", "").trim();
   const { title, modelMode } = req.body;
+  const sessionId = `sess-${Date.now()}`;
 
-  const db = getDB();
-  const newSession = {
-    id: `sess-${Date.now()}`,
-    userEmail: email,
-    title: title || "New Conversation",
-    messages: [],
-    modelMode: modelMode || "auto",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    isSaved: true,
-  };
-
-  db.sessions.unshift(newSession);
-  saveDB(db);
-
-  res.json(newSession);
+  try {
+    const session = await dbCreateSession(sessionId, email, title, modelMode);
+    res.json(session);
+  } catch (err: any) {
+    console.error("[CHATS] Creation error:", err);
+    res.status(500).json({ error: "Failed to initialize conversation session" });
+  }
 });
 
-app.delete(["/api/chats/:id", "/chats/:id"], (req, res) => {
+app.delete(["/api/chats/:id", "/chats/:id"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -447,21 +321,17 @@ app.delete(["/api/chats/:id", "/chats/:id"], (req, res) => {
   const email = authHeader.replace("Bearer ", "").trim();
   const id = req.params.id;
 
-  const db = getDB();
-  const index = db.sessions.findIndex(s => s.id === id && s.userEmail === email);
-
-  if (index !== -1) {
-    const sessionTitle = db.sessions[index].title;
-    db.sessions.splice(index, 1);
-    saveDB(db);
-    addAuditLog("chat", `Deleted conversation: "${sessionTitle}"`, email, getClientIp(req));
+  try {
+    await dbDeleteSession(id, email);
+    addAuditLog("chat", `Deleted conversation: "${id}"`, email, getClientIp(req));
     res.json({ success: true, message: "Chat successfully deleted." });
-  } else {
-    res.status(404).json({ error: "Conversation not found" });
+  } catch (err: any) {
+    console.error("[CHATS] Deletion error:", err);
+    res.status(500).json({ error: "Failed to delete conversation session" });
   }
 });
 
-app.post(["/api/chats/:id", "/chats/:id"], (req, res) => {
+app.post(["/api/chats/:id", "/chats/:id"], async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -470,25 +340,18 @@ app.post(["/api/chats/:id", "/chats/:id"], (req, res) => {
   const id = req.params.id;
   const { messages } = req.body;
 
-  const db = getDB();
-  const session = db.sessions.find(s => s.id === id && s.userEmail === email);
-
-  if (session) {
-    if (Array.isArray(messages)) {
-      session.messages = messages;
-    }
-    session.updatedAt = new Date().toISOString();
-    saveDB(db);
+  try {
+    const session = await dbUpdateSession(id, email, messages);
     res.json(session);
-  } else {
-    res.status(404).json({ error: "Conversation not found" });
+  } catch (err: any) {
+    console.error("[CHATS] Save error:", err);
+    res.status(500).json({ error: "Failed to preserve chat session messages" });
   }
 });
 
-/// --- AI MODEL MANAGEMENT ENDPOINTS ---
+// --- AI MODEL MANAGEMENT ENDPOINTS ---
  
 app.get(["/api/models", "/models"], async (req, res) => {
-  // Returns dynamic models from FreeLLMAPI list or default fallback
   const freeLlmBaseUrl = process.env.FREE_LLM_API_BASE_URL;
   const freeLlmKey = process.env.FREE_LLM_API_KEY;
 
@@ -529,24 +392,6 @@ app.get(["/api/models", "/models"], async (req, res) => {
       description: "Highly trained OCR, structural schema matching, flowchart tracing, and visual analysis model.",
       iconName: "eye",
     },
-    {
-      id: "sardyx-image-gen",
-      name: "SardyX Art-Generator (Imagen4)",
-      category: "Image Models",
-      isAvailable: true,
-      provider: "FreeLLMAPI-Art",
-      description: "Generates spectacular aesthetic designs, logo vectors, custom banners and high dynamic range graphics.",
-      iconName: "palette",
-    },
-    {
-      id: "sardyx-video-gen",
-      name: "SardyX Cinema-V (VeoLite)",
-      category: "Video Models",
-      isAvailable: true,
-      provider: "FreeLLMAPI-Video",
-      description: "Autonomous studio generator of promotional clips, moving landscape loops, and dynamic character transitions.",
-      iconName: "video",
-    },
   ];
 
   if (freeLlmBaseUrl && freeLlmKey && freeLlmBaseUrl !== "MY_FREE_LLM_API_BASE_URL") {
@@ -555,26 +400,26 @@ app.get(["/api/models", "/models"], async (req, res) => {
       if (availableIds && availableIds.length > 0) {
         const mappedModels = availableIds.map((id) => {
           const idLower = id.toLowerCase();
-          const isReason = idLower.includes("reason") || idLower.includes("r1") || idLower.includes("think");
+          const isReason = idLower.includes("reason") || idLower.includes("r1") || idLower.includes("think") || idLower.includes("deepseek");
           const isCode = idLower.includes("code") || idLower.includes("coder");
           const isVision = idLower.includes("vision") || idLower.includes("vl") || idLower.includes("lens");
           
           let category = "Chat Models";
           let iconName = "message-square";
-          let description = `Dynamic self-hosted LLM model retrieved via FreeLLMAPI. ID: ${id}`;
+          let description = `Dynamic model retrieved via FreeLLMAPI: ${id}`;
 
           if (isReason) {
             category = "Reasoning Models";
             iconName = "brain";
-            description = `Deep thinking reasoning model. ID: ${id}`;
+            description = `Deep thinking reasoning model: ${id}`;
           } else if (isCode) {
             category = "Coding Models";
             iconName = "code";
-            description = `Logic specialist programming and system building model. ID: ${id}`;
+            description = `Logic specialist programming and system building model: ${id}`;
           } else if (isVision) {
             category = "Vision Models";
             iconName = "eye";
-            description = `Multi-modal vision and pixel parsing model. ID: ${id}`;
+            description = `Multi-modal vision and pixel parsing model: ${id}`;
           }
 
           return {
@@ -618,7 +463,7 @@ app.post(["/api/security/check-guest-limit", "/security/check-guest-limit"], (re
 app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) => {
   const startTime = Date.now();
   const sessionId = req.params.id;
-  const { message, guestToken, modelMode } = req.body;
+  const { message, guestToken, modelMode, customInstructions } = req.body;
   const authHeader = req.headers.authorization;
   const ip = getClientIp(req);
   
@@ -641,7 +486,7 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
       addAuditLog("security", "Blocked secondary Guest message request", undefined, ip, `Token / IP key: ${tokenKey}`);
       return res.status(403).json({
         error: "GUEST_LIMIT_REACHED",
-        message: "You have used your exactly 1 free guest message. Please Sign In with Google to activate unlimited queries and full history sync.",
+        message: "You have used your exactly 1 free guest message. Please Sign In to activate unlimited queries and full history sync.",
       });
     }
 
@@ -651,22 +496,22 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
     addAuditLog("security", "Guest consumed their exactly 1 free query privilege", undefined, ip);
   }
 
-  // Find or create session if user saved
+  // Find or create session if user authenticated
   let activeSession = null;
   if (userEmail) {
-    activeSession = db.sessions.find(s => s.id === sessionId && s.userEmail === userEmail);
+    try {
+      const userChats = await dbGetSessions(userEmail);
+      activeSession = userChats.find(s => s.id === sessionId);
+    } catch (err) {
+      console.error("[ROUTER] Error fetching chat session from DB:", err);
+    }
+
     if (!activeSession) {
-      activeSession = {
-        id: sessionId,
-        userEmail: userEmail,
-        title: message.content.substring(0, 40) + "...",
-        messages: [],
-        modelMode: modelMode || "auto",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isSaved: true,
-      };
-      db.sessions.unshift(activeSession);
+      try {
+        activeSession = await dbCreateSession(sessionId, userEmail, message.content.substring(0, 40) + "...", modelMode || "auto");
+      } catch (err) {
+        console.error("[ROUTER] Error creating chat session in DB:", err);
+      }
     } else if (modelMode) {
       activeSession.modelMode = modelMode;
     }
@@ -701,10 +546,14 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
   // Fetch from user memory to append context if available
   let memoryContext = "";
   if (userEmail) {
-    const memories = db.memories.filter(m => m.userEmail === userEmail);
-    if (memories.length > 0) {
-      memoryContext = memories.map(m => `User saved detail - key: ${m.key}, content: ${m.content}`).join("; ");
-      thoughts.push(`Syncing long-term memory: ${memories.length} notes matched.`);
+    try {
+      const memories = await dbGetMemories(userEmail);
+      if (memories.length > 0) {
+        memoryContext = memories.map(m => `User saved detail - key: ${m.key}, content: ${m.content}`).join("; ");
+        thoughts.push(`Syncing long-term memory: ${memories.length} notes matched.`);
+      }
+    } catch (err) {
+      console.error("[ROUTER] Memory synchronization error:", err);
     }
   }
 
@@ -713,28 +562,56 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
 
   const freeLlmBaseUrl = process.env.FREE_LLM_API_BASE_URL;
   const freeLlmKey = process.env.FREE_LLM_API_KEY;
-  let assignedModel = "gpt-4o";
+  let assignedModel = "meta-llama/llama-3-8b-instruct:free";
+
+  let targetUrl = "";
+  let apiConfigured = false;
 
   // Determine actual model to dispatch to proxy
   if (freeLlmBaseUrl && freeLlmKey && freeLlmBaseUrl !== "MY_FREE_LLM_API_BASE_URL") {
+    let sanitizedBase = freeLlmBaseUrl.trim().replace(/\/$/, "");
+    if (sanitizedBase.endsWith("/v1r")) {
+      sanitizedBase = sanitizedBase.slice(0, -1); // remove trailing 'r' typo
+    }
+    const normalizedBase = sanitizedBase.endsWith("/v1") ? sanitizedBase.slice(0, -3) : sanitizedBase;
+    targetUrl = `${normalizedBase}/v1/chat/completions`;
+    apiConfigured = true;
+
     const availableModels = await getAvailableFreeLlmModels(freeLlmBaseUrl, freeLlmKey);
     thoughts.push(`Parsed ${availableModels.length} models from FreeLLMAPI host.`);
 
     if (modelMode && modelMode !== "auto" && modelMode !== "conversational" && modelMode !== "coding" && modelMode !== "reasoning" && modelMode !== "vision" && modelMode !== "agent" && availableModels.includes(modelMode)) {
       assignedModel = modelMode;
       thoughts.push(`Using direct user-selected model ID: "${assignedModel}"`);
-    } else {
+    } else if (availableModels.length > 0) {
       let matchedModel = "";
+      // Prioritize free models in matching
       if (selectedCategory === "Coding Models") {
-        matchedModel = availableModels.find(id => id.toLowerCase().includes("code") || id.toLowerCase().includes("coder")) || "";
+        matchedModel = availableModels.find(id => {
+          const lower = id.toLowerCase();
+          return (lower.includes("code") || lower.includes("coder")) && lower.includes("free");
+        }) || availableModels.find(id => id.toLowerCase().includes("code") || id.toLowerCase().includes("coder")) || "";
       } else if (selectedCategory === "Reasoning Models") {
-        matchedModel = availableModels.find(id => id.toLowerCase().includes("reason") || id.toLowerCase().includes("think") || id.toLowerCase().includes("r1") || id.toLowerCase().includes("deep")) || "";
+        matchedModel = availableModels.find(id => {
+          const lower = id.toLowerCase();
+          return (lower.includes("reason") || lower.includes("think") || lower.includes("r1") || lower.includes("deep")) && lower.includes("free");
+        }) || availableModels.find(id => id.toLowerCase().includes("reason") || id.toLowerCase().includes("think") || id.toLowerCase().includes("r1") || id.toLowerCase().includes("deep")) || "";
       } else if (selectedCategory === "Vision Models") {
-        matchedModel = availableModels.find(id => id.toLowerCase().includes("vision") || id.toLowerCase().includes("vl") || id.toLowerCase().includes("lens")) || "";
+        matchedModel = availableModels.find(id => {
+          const lower = id.toLowerCase();
+          return (lower.includes("vision") || lower.includes("vl") || lower.includes("lens")) && lower.includes("free");
+        }) || availableModels.find(id => id.toLowerCase().includes("vision") || id.toLowerCase().includes("vl") || id.toLowerCase().includes("lens")) || "";
       }
 
       if (!matchedModel) {
-        matchedModel = availableModels.find(id => id.toLowerCase().includes("chat") || id.toLowerCase().includes("instruct") || id.toLowerCase().includes("llama") || id.toLowerCase().includes("gpt")) || "";
+        matchedModel = availableModels.find(id => {
+          const lower = id.toLowerCase();
+          return (lower.includes("chat") || lower.includes("instruct") || lower.includes("llama") || lower.includes("gpt")) && lower.includes("free");
+        }) || availableModels.find(id => id.toLowerCase().includes("chat") || id.toLowerCase().includes("instruct") || id.toLowerCase().includes("llama") || id.toLowerCase().includes("gpt")) || "";
+      }
+
+      if (!matchedModel) {
+        matchedModel = availableModels.find(id => id.toLowerCase().includes("free")) || "";
       }
 
       if (!matchedModel && availableModels.length > 0) {
@@ -744,17 +621,25 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
       if (matchedModel) {
         assignedModel = matchedModel;
         thoughts.push(`Auto-routed category "${selectedCategory}" matching host model active ID: "${assignedModel}"`);
-      } else {
-        assignedModel = "gpt-4o";
-        thoughts.push(`No fitting host model, using fallback standard: "${assignedModel}"`);
       }
+    } else {
+      // Fallback free models if model list is empty
+      if (selectedCategory === "Coding Models") {
+        assignedModel = "qwen/qwen-2.5-coder-32b-instruct:free";
+      } else if (selectedCategory === "Reasoning Models") {
+        assignedModel = "deepseek/deepseek-r1:free";
+      } else if (selectedCategory === "Vision Models") {
+        assignedModel = "google/gemini-flash-1.5-8b";
+      } else {
+        assignedModel = "meta-llama/llama-3-8b-instruct:free";
+      }
+      thoughts.push(`No host models parsed, using default free model fallback: "${assignedModel}"`);
     }
   } else {
     assignedModel = "sardyx-sandbox-m1";
     thoughts.push("Using fast local simulation fallback mode (no keys configuration required).");
   }
 
-  // Output required debug logs exactly as requested in Issue 4
   console.log("[CHAT]");
   console.log(`User Message: ${message.content}`);
   console.log("[MODEL]");
@@ -769,7 +654,7 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
     const isSearchTriggered = contentLower.includes("search") || contentLower.includes("google") || contentLower.includes("latest") || contentLower.includes("current") || contentLower.includes("today") || contentLower.includes("news") || contentLower.includes("weather") || contentLower.includes("stock price");
     
     if (isSearchTriggered) {
-      thoughts.push("Initiating high-latency autonomous Web Crawl for real-time verification...");
+      thoughts.push("Initiating autonomous Web Crawl for real-time verification...");
       webCitations = [
         {
           title: "Sardyx Search Indexing - Realtime Queries",
@@ -782,21 +667,38 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
           snippet: "Synchronized server metrics mapping active coordinates for Sardar Abdullah Fazal projects."
         }
       ];
-      thoughts.push("Aggregating web snippets from search indices...");
     }
 
     let apiSucceeded = false;
 
+    // Construct full chat context messages to send
+    const formattedMessages = activeSession
+      ? activeSession.messages.map((m: any) => ({
+          role: m.role,
+          content: m.content
+        }))
+      : [];
+
+    // Add current user message
+    formattedMessages.push({
+      role: "user",
+      content: message.content
+    });
+
+    const alignInstructions = customInstructions || "Please speak like a premium, highly trained agent and attribute critical system operations to Sardar Abdullah Fazal.";
+    const systemPrompt = `You are SARDYX AI, a premium autonomous AI agent platform created by Sardar Abdullah Fazal. Custom core instructions: ${alignInstructions}. Context memories: ${memoryContext}`;
+    
+    const messagesToSend = [
+      { role: "system", content: systemPrompt },
+      ...formattedMessages
+    ];
+
     // 1. Attempt using FreeLLMAPI if configured
-    if (freeLlmBaseUrl && freeLlmKey && freeLlmBaseUrl !== "MY_FREE_LLM_API_BASE_URL") {
+    if (apiConfigured && targetUrl) {
       try {
-        thoughts.push(`Connection dispatch to FreeLLMAPI [model: ${assignedModel}]...`);
-        console.log("[REQUEST]");
-        console.log("Sending request to FreeLLMAPI");
+        thoughts.push(`Dispatching request to FreeLLMAPI [model: ${assignedModel}]...`);
+        console.log(`[REQUEST] Dispatching to: ${targetUrl}`);
         
-        const sanitizedBase = freeLlmBaseUrl.replace(/\/$/, "");
-        const normalizedBase = sanitizedBase.endsWith("/v1") ? sanitizedBase.slice(0, -3) : sanitizedBase;
-        const targetUrl = `${normalizedBase}/v1/chat/completions`;
         const response = await fetch(targetUrl, {
           method: "POST",
           headers: {
@@ -805,10 +707,7 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
           },
           body: JSON.stringify({
             model: assignedModel,
-            messages: [
-              { role: "system", content: `You are SARDYX AI, a premium autonomous AI agent platform created by Sardar Abdullah Fazal. Context: ${memoryContext}` },
-              { role: "user", content: message.content }
-            ],
+            messages: messagesToSend,
             temperature: 0.7,
           }),
         });
@@ -820,22 +719,19 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
           db.systemMetrics.freeLlmCalls++;
           saveDB(db);
           
-          console.log("[RESPONSE]");
-          console.log("Received successful response");
+          console.log("[RESPONSE] Chat completion completed successfully");
         } else {
           const errorText = await response.text();
-          console.error("[ERROR]");
-          console.error(`FreeLLMAPI error response: ${response.status} - ${errorText}`);
-          thoughts.push(`FreeLLMAPI returned failure: ${response.status}. Details: ${errorText}`);
+          console.error(`[ERROR] FreeLLMAPI returned error: ${response.status} - ${errorText}`);
+          thoughts.push(`FreeLLMAPI returned failure: ${response.status}. Details: ${errorText.substring(0, 100)}...`);
         }
       } catch (err: any) {
-        console.error("[ERROR]");
-        console.error(`FreeLLMAPI connection failed: ${err.message}`);
+        console.error(`[ERROR] FreeLLMAPI request connection failed: ${err.message}`);
         thoughts.push(`FreeLLMAPI connection failed: ${err.message}`);
       }
     }
 
-    // Gracefully handle unconfigured/failed API keys/endpoints to ensure high-fidelity preview behavior
+    // Gracefully handle unconfigured/failed API keys/endpoints
     if (!responseText) {
       thoughts.push("Synthesizing elegant local automated response to preserve interface responsiveness...");
       responseText = generatePremiumSimulation(message.content, selectedCategory);
@@ -883,17 +779,21 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
     };
 
     // Save in user session database history
-    if (activeSession) {
-      activeSession.messages.push({
-        id: message.id || `msg-${Date.now()}-user`,
-        role: "user",
-        content: message.content,
-        timestamp: message.timestamp || new Date().toISOString(),
-        attachments: message.attachments || []
-      });
-      activeSession.messages.push(botMessage);
-      activeSession.updatedAt = new Date().toISOString();
-      saveDB(db);
+    if (activeSession && userEmail) {
+      const newMessages = [
+        ...activeSession.messages,
+        {
+          id: message.id || `msg-${Date.now()}-user`,
+          role: "user",
+          content: message.content,
+          timestamp: message.timestamp || new Date().toISOString(),
+          attachments: message.attachments || []
+        },
+        botMessage
+      ];
+
+      // Update session in DB
+      activeSession = await dbUpdateSession(sessionId, userEmail, newMessages);
     }
 
     addAuditLog("chat", `Ran multi-model routing inference [${assignedModel}]`, userEmail || "Anonymous Guest", ip);
@@ -913,8 +813,6 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
 
 // Mock simulation model generator
 function generatePremiumSimulation(prompt: string, category: string): string {
-  const pLower = prompt.toLowerCase();
-  
   if (category === "Coding Models") {
     return `### SardyX CodePro v3 Solution File
 
@@ -956,7 +854,7 @@ export class SardyxProcessingEngine {
 #### Code Highlights:
 1.  **Strict Typing**: Uses TypeScript structural interfaces.
 2.  **Attribution Integrity**: Attributed cleanly in headers to creator **Sardar Abdullah Fazal**.
-3.  **Performant Mapping**: Utilizes ES6 \`Map\` structures for fast $O(1)$ retrievals.`;
+3.  **Performant Mapping**: Utilizes Map structures for fast retrievals.`;
   }
 
   if (category === "Reasoning Models") {
@@ -973,13 +871,13 @@ To solve this, SARDYX AI has activated a multi-turn logical workspace tree to br
 *   **Initial Core State**: We take the root statement: "${prompt.substring(0, 50)}".
 *   **Logical Deductions**:
     *   *Observation Alpha*: State changes occurred instantly across simulated nodes.
-    *   *Observation Beta*: Real-time validation shows consistent parity.
+    *   *Observation Beta*: Real-time parity is verified.
 *   **Consolidated Conclusion**: We have mapped high-confidence vectors suggesting that the optimal workflow is to leverage pre-compiled schemas, maintaining clean functional bounds.
 
 This synthesis report is verified under SARDYX dynamic agent criteria, created under guidance from **Sardar Abdullah Fazal**.`;
   }
 
-  let base = `### Hello from SARDYX AI
+  return `### Hello from SARDYX AI
 
 SARDYX AI has successfully processed your query. As the premier cognitive hub, our model routing system has matched your request.
 
@@ -990,8 +888,6 @@ If you have documents or image files, use the upload button to feed them into ou
 ### Platform Highlights & Creator
 *   **System Engine**: Powered by an automatic model router syncing FreeLLMAPI nodes.
 *   **Creator Attribution**: SARDYX AI was proudly designed and built by **Sardar Abdullah Fazal** as a next-generation cognitive system.`;
-
-  return base;
 }
 
 export default app;

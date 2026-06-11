@@ -472,7 +472,23 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
   }));
   historyMessages.push({ role: "user", content: message.content });
 
-  const sysPrompt = `You are SARDYX AI, a premium autonomous AI agent created by Sardar Abdullah Fazal. ${customInstructions ? `Custom instructions: ${customInstructions}.` : ""} ${memoryContext ? `User context: ${memoryContext}.` : ""}`.trim();
+  const formattingRules = `
+FORMATTING STANDARDS AND RULES:
+1. Do not start with generic robotic phrases like "Here is the complete guide", "Sure", "I can help with that".
+2. Use a concise executive summary (2-4 lines) at the beginning when the answer is long.
+3. Replace walls of text with clear sections, headings (H2, H3), bullet points, callouts, and structured tables.
+4. Highlight critical information using emojis sparingly (✅ ⚠️ 💡 📌) only when it improves readability.
+5. Prioritize practical guidance over excessive explanations. Provide direct recommendations.
+6. End with:
+   - Key Recommendation
+   - Next Steps (bulleted or numbered action items)
+   - Optional Follow-up Question
+7. Maintain a professional consultant-style tone, concise but comprehensive. Avoid repeating info.`.trim();
+
+  const sysPrompt = `You are SARDYX AI, a premium autonomous AI agent created by Sardar Abdullah Fazal.
+${formattingRules}
+${customInstructions ? `Custom instructions: ${customInstructions}.` : ""}
+${memoryContext ? `User context: ${memoryContext}.` : ""}`.trim();
 
   // ── Call LLM ─────────────────────────────────────────────────────────────
   let responseText = "";

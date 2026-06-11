@@ -792,11 +792,8 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
               <Menu className="w-4 h-4" />
             </button>
             <div className="flex flex-col">
-              <span className="text-xs font-semibold text-zinc-200">
+              <span className="text-sm font-medium text-zinc-200">
                 {activeSession ? activeSession.title : 'Playground Sandbox'}
-              </span>
-              <span className="text-[9px] font-mono text-zinc-550 block mt-0.5">
-                ACTIVE PIPELINE: AUTO DYNAMIC ROUTER
               </span>
             </div>
           </div>
@@ -806,9 +803,9 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             <select
               value={selectedModelMode}
               onChange={(e: any) => setSelectedModelMode(e.target.value)}
-              className="bg-zinc-900 border border-white/10 focus:border-indigo-500 px-3 py-1.5 rounded-xl text-[10px] font-mono text-zinc-100 outline-none transition-all cursor-pointer"
+              className="bg-[#0a0a0a] hover:bg-zinc-900 border border-white/10 focus:border-indigo-500 px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-200 outline-none transition-all cursor-pointer"
             >
-              <option value="auto">🤖 Auto router</option>
+              <option value="auto">🤖 Auto Router</option>
               {models.map((m) => {
                 const icon = m.iconName === 'brain' ? '🧠' : m.iconName === 'code' ? '💻' : m.iconName === 'eye' ? '👁️' : m.iconName === 'palette' ? '🎨' : m.iconName === 'video' ? '📹' : '💬';
                 return (
@@ -818,14 +815,6 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                 );
               })}
             </select>
-
-            <button
-              onClick={exportConversationLog}
-              className="p-1 px-[7px] border border-white/5 hover:border-white/10 text-zinc-400 hover:text-white rounded-lg cursor-pointer transition-all"
-              title="Export Conversation Log"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-            </button>
           </div>
         </header>
 
@@ -1145,26 +1134,19 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
               </form>
             )}
 
-            {/* Footer diagnostic logs */}
-            <div className="flex flex-wrap justify-between items-center text-[10px] text-zinc-650 font-mono tracking-wider pt-1 p-1">
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-                🛡️ Creator: Sardar Abdullah Fazal
-              </span>
-              <div className="flex gap-4">
-                {activeSession && activeSession.messages.length > 2 && (
-                  <button 
-                    onClick={regenerateLastResponse}
-                    disabled={loading}
-                    className="hover:text-zinc-400 flex items-center gap-1 cursor-pointer transition-all"
-                  >
-                    <RotateCw className="w-3 h-3" />
-                    Regenerate response
-                  </button>
-                )}
-                <span>Unified API Proxy active</span>
+            {/* Regenerate Action */}
+            {activeSession && activeSession.messages.length > 2 && (
+              <div className="flex justify-center pt-2 pb-1">
+                <button 
+                  onClick={regenerateLastResponse}
+                  disabled={loading}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                  Regenerate response
+                </button>
               </div>
-            </div>
+            )}
           </div>
         </section>
       </main>

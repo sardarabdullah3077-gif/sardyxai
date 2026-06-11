@@ -912,8 +912,8 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                     </div>
                   )}
 
-                  {/* MAIN Markdowns output renderer with manual styling */}
-                  <div className="prose prose-invert prose-sm max-w-none text-zinc-200 font-light leading-relaxed">
+                  {/* MAIN Markdowns output renderer with premium styling */}
+                  <div className="prose-premium text-zinc-200">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{

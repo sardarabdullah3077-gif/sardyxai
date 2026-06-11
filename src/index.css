@@ -22,3 +22,150 @@
     transform: translateY(0);
   }
 }
+
+/* Premium Markdown Styling for AI Responses */
+@layer components {
+  /* Markdown prose improvements for premium responses */
+  .prose-premium {
+    @apply prose prose-invert prose-sm max-w-none;
+  }
+
+  /* Headings: Professional, premium styling */
+  .prose-premium h1 {
+    @apply text-2xl font-semibold text-white mt-6 mb-4 leading-tight;
+  }
+
+  .prose-premium h2 {
+    @apply text-lg font-semibold text-white mt-5 mb-3 leading-tight border-b border-white/10 pb-2;
+  }
+
+  .prose-premium h3 {
+    @apply text-base font-medium text-white/95 mt-4 mb-2.5;
+  }
+
+  /* Paragraphs: Proper spacing and readability */
+  .prose-premium p {
+    @apply text-zinc-200 leading-relaxed mb-4 font-light;
+  }
+
+  /* Lists: Better spacing and alignment */
+  .prose-premium ul {
+    @apply list-none pl-0 space-y-2.5 my-4;
+  }
+
+  .prose-premium ul li {
+    @apply flex items-start gap-3 text-zinc-200 font-light;
+  }
+
+  .prose-premium ul li::before {
+    @apply content-['•'] text-indigo-400 font-bold shrink-0 mt-0.5;
+  }
+
+  .prose-premium ol {
+    @apply list-none pl-0 space-y-2.5 my-4;
+  }
+
+  .prose-premium ol li {
+    @apply flex items-start gap-3 text-zinc-200 font-light;
+  }
+
+  .prose-premium ol li::before {
+    @apply content-[counter(item)'.'] counter-increment-item text-indigo-400 font-semibold min-w-6 shrink-0;
+  }
+
+  /* Horizontal rule: Clean separator */
+  .prose-premium hr {
+    @apply my-6 border-white/10;
+  }
+
+  /* Bold: Highlight important information */
+  .prose-premium strong {
+    @apply font-semibold text-white;
+  }
+
+  /* Italics: Emphasis without overwhelming */
+  .prose-premium em {
+    @apply text-zinc-100 italic;
+  }
+
+  /* Inline code: Technical terms */
+  .prose-premium code:not(pre code) {
+    @apply bg-zinc-800 text-indigo-300 px-2 py-1 rounded text-[13px] font-mono;
+  }
+
+  /* Blockquotes: Important context */
+  .prose-premium blockquote {
+    @apply border-l-4 border-indigo-500 pl-4 py-2 my-4 text-zinc-300 italic bg-indigo-950/20 rounded-r-lg;
+  }
+
+  /* Links: Interactive and visible */
+  .prose-premium a {
+    @apply text-indigo-400 hover:text-indigo-300 underline decoration-indigo-400/50 hover:decoration-indigo-400 transition-colors;
+  }
+
+  /* Tables: Professional styling */
+  .prose-premium table {
+    @apply w-full border-collapse my-4;
+  }
+
+  .prose-premium th {
+    @apply bg-zinc-800/50 text-white font-semibold px-4 py-2.5 text-left border-b border-white/10;
+  }
+
+  .prose-premium td {
+    @apply px-4 py-2.5 border-b border-white/5 text-zinc-200;
+  }
+
+  .prose-premium tr:hover {
+    @apply bg-zinc-800/20;
+  }
+
+  /* Premium response structure helpers */
+  .response-answer {
+    @apply mb-6;
+  }
+
+  .response-section {
+    @apply mb-6 last:mb-0;
+  }
+
+  .response-divider {
+    @apply my-6 border-white/10;
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 640px) {
+    .prose-premium h1 {
+      @apply text-xl mt-5 mb-3;
+    }
+
+    .prose-premium h2 {
+      @apply text-base mt-4 mb-2.5;
+    }
+
+    .prose-premium h3 {
+      @apply text-sm mt-3 mb-2;
+    }
+
+    .prose-premium ul li,
+    .prose-premium ol li {
+      @apply gap-2.5;
+    }
+
+    .prose-premium p {
+      @apply text-sm mb-3;
+    }
+  }
+}
+
+/* Dark mode optimizations (already applied but reinforced) */
+@layer base {
+  /* Ensure dark theme consistency */
+  body {
+    @apply bg-zinc-950 text-zinc-200;
+  }
+
+  code {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
+}

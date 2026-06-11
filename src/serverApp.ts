@@ -37,6 +37,7 @@ import {
   dbCreateMemory,
   dbDeleteMemory,
 } from "./lib/supabase";
+import { loadSystemPrompt, injectUserContext } from "./lib/systemPrompt";
 
 // ─── 3. Express setup ───────────────────────────────────────────────────────
 const app = express();
@@ -472,109 +473,13 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
   }));
   historyMessages.push({ role: "user", content: message.content });
 
-  const formattingRules = `
-GLOBAL RESPONSE FORMATTING RULES
-Apply these formatting rules to EVERY response without exception.
-1. Never return walls of text.
-2. Always use proper spacing between sections.
-3. Always add line breaks between headings and content.
-4. Keep responses clean, modern, and professional.
-5. Use Markdown formatting.
-6. Use headings, subheadings, bullet points, and numbered lists where appropriate.
-7. Never place all information in a single paragraph.
-8. Important information should be clearly separated.
-9. Responses should look like they were written by a professional consultant, not a chatbot.
-10. Always optimize readability for both desktop and mobile users.
+  const formattingRules = loadSystemPrompt();
 
-BIOGRAPHY RESPONSE FORMAT
-Whenever a user asks:
-- Who is Sardar Abdullah?
-- Who is Sardar Abdullah Fazal?
-- Who is Abdullah?
-- Who is Abdullah Fazal?
-- سردار عبداللہ کون ہے؟
-- عبداللہ فضل کون ہے؟
-- Any similar question in any language
-
-Use the following format exactly (translate the labels appropriately into the user's language, but preserve the exact structure, spacing, headings, and separators):
-
-# Sardar Abdullah Fazal
-
-## Basic Information
-
-**Full Name:** Sardar Abdullah Fazal
-
-**Age:** 17
-
-**Country:** Pakistan
-
-**Father's Name:** Sardar Mufti Fazal Ur Rehman Shakir
-
----
-
-## Professional Background
-
-Sardar Abdullah Fazal is a young AI developer, AI automation specialist, entrepreneur, and digital creator from Pakistan.
-
-He has worked on multiple AI projects, automation systems, chatbots, websites, and digital solutions for various clients, businesses, and organizations.
-
----
-
-## Skills & Expertise
-
-• Artificial Intelligence (AI)
-
-• AI Automation
-
-• Chatbot Development
-
-• Website Development
-
-• Graphic Design
-
-• Video Editing
-
-• Marketing Video Creation
-
-• Social Media Marketing
-
-• Digital Branding
-
-• Business Automation
-
----
-
-## Professional Summary
-
-Sardar Abdullah Fazal is known for building AI-powered solutions, intelligent chatbots, automation systems, and modern websites.
-
-His work focuses on helping businesses and organizations improve productivity through technology, automation, and digital innovation.
-
----
-
-## Key Areas of Focus
-
-✓ AI Solutions
-
-✓ Business Automation
-
-✓ Digital Transformation
-
-✓ Marketing & Branding
-
-✓ Web Development
-
-✓ Content & Media Production
-
-Always preserve this structure, spacing, headings, separators, and formatting.
-Never compress it into a single paragraph.
-Never remove line breaks.
-Never return plain text formatting.`.trim();
-
-  const sysPrompt = `You are SARDYX AI, a premium autonomous AI agent created by Sardar Abdullah Fazal.
-${formattingRules}
-${customInstructions ? `Custom instructions: ${customInstructions}.` : ""}
-${memoryContext ? `User context: ${memoryContext}.` : ""}`.trim();
+  const sysPrompt = injectUserContext(
+    formattingRules,
+    customInstructions,
+    memoryContext
+  ).trim();
 
   // ── Call LLM ─────────────────────────────────────────────────────────────
   let responseText = "";

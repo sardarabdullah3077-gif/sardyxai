@@ -78,7 +78,7 @@ export default function App() {
       });
       if (response.ok) {
         const data = await response.json();
-        if (data.currentCount >= 1 && !user) {
+        if (data.currentCount >= 5 && !user) {
           setIsGuestBlocked(true);
         } else {
           setIsGuestBlocked(false);

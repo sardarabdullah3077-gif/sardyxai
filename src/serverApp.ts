@@ -36,6 +36,10 @@ import {
   dbGetMemories,
   dbCreateMemory,
   dbDeleteMemory,
+  dbVerifyOtp,
+  dbResendOtp,
+  dbGetGuestLimit,
+  dbIncrementGuestLimit,
 } from "./lib/supabase";
 import { loadSystemPrompt, injectUserContext } from "./lib/systemPrompt";
 
@@ -129,8 +133,8 @@ app.post(["/api/auth/local-signup", "/auth/local-signup"], async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
     const displayName = name || fullName || email.split("@")[0];
     const user = await dbSignUp(email, password, displayName);
-    addAuditLog("auth", `Account registered: ${user.email}`, user.email, getClientIp(req));
-    return res.json({ user, token: user.email });
+    addAuditLog("auth", `Account registered: ${user.email} (verification required)`, user.email, getClientIp(req));
+    return res.json({ user, verificationRequired: true });
   } catch (err: any) {
     console.error("[AUTH] Signup error:", err.message);
     return res.status(400).json({ error: err.message || "Signup failed" });
@@ -147,7 +151,38 @@ app.post(["/api/auth/local-login", "/auth/local-login"], async (req, res) => {
     return res.json({ user, token: user.email });
   } catch (err: any) {
     console.error("[AUTH] Login error:", err.message);
+    if (err.message === "EMAIL_NOT_VERIFIED") {
+      return res.status(400).json({ error: "EMAIL_NOT_VERIFIED", email });
+    }
     return res.status(400).json({ error: err.message || "Login failed" });
+  }
+});
+
+app.post(["/api/auth/verify-otp", "/auth/verify-otp"], async (req, res) => {
+  console.log("[AUTH] POST /api/auth/verify-otp");
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ error: "Email and verification code are required." });
+    const user = await dbVerifyOtp(email, code);
+    addAuditLog("auth", `Email verified: ${user.email}`, user.email, getClientIp(req));
+    return res.json({ user, token: user.email });
+  } catch (err: any) {
+    console.error("[AUTH] OTP verification error:", err.message);
+    return res.status(400).json({ error: err.message || "OTP verification failed" });
+  }
+});
+
+app.post(["/api/auth/resend-otp", "/api/auth/resend-otp"], async (req, res) => {
+  console.log("[AUTH] POST /api/auth/resend-otp");
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required." });
+    await dbResendOtp(email);
+    addAuditLog("auth", `OTP code resent: ${email}`, email, getClientIp(req));
+    return res.json({ success: true, message: "Verification code has been resent to your email." });
+  } catch (err: any) {
+    console.error("[AUTH] OTP resend error:", err.message);
+    return res.status(400).json({ error: err.message || "OTP resend failed" });
   }
 });
 
@@ -319,13 +354,22 @@ app.get(["/api/models", "/models"], async (_req, res) => {
 
 // ─── GUEST SECURITY ───────────────────────────────────────────────────────────
 
-app.post(["/api/security/check-guest-limit", "/security/check-guest-limit"], (req, res) => {
+app.post(["/api/security/check-guest-limit", "/security/check-guest-limit"], async (req, res) => {
   const { guestToken } = req.body;
   const ip = getClientIp(req);
-  const db = getDB();
-  const tokenKey = guestToken || ip;
-  const count = db.guestTokens[tokenKey] || 0;
-  return res.json({ allowed: count < 1, currentCount: count });
+  
+  let countToken = 0;
+  let countIp = 0;
+  
+  try {
+    if (guestToken) countToken = await dbGetGuestLimit(guestToken);
+    if (ip) countIp = await dbGetGuestLimit(ip);
+  } catch (err) {
+    console.error("Error checking guest limits:", err);
+  }
+  
+  const count = Math.max(countToken, countIp);
+  return res.json({ allowed: count < 5, currentCount: count });
 });
 
 // ─── CORE CHAT / AI INFERENCE ENDPOINT ───────────────────────────────────────
@@ -346,18 +390,33 @@ app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) =>
 
   // ── Guest rate limiting ──────────────────────────────────────────────────
   if (!userEmail) {
-    const tokenKey = guestToken || ip;
-    const count = db.guestTokens[tokenKey] || 0;
-    if (count >= 1) {
+    let countToken = 0;
+    let countIp = 0;
+    
+    try {
+      if (guestToken) countToken = await dbGetGuestLimit(guestToken);
+      if (ip) countIp = await dbGetGuestLimit(ip);
+    } catch (err) {
+      console.error("Error reading guest limits in chat endpoint:", err);
+    }
+    
+    const count = Math.max(countToken, countIp);
+    if (count >= 5) {
       db.systemMetrics.rateLimitHits++;
       saveDB(db);
       return res.status(403).json({
         error: "GUEST_LIMIT_REACHED",
-        message: "You have used your 1 free guest message. Please Sign In to continue.",
+        message: "You have used your 5 free guest messages. Please Sign Up or Log In to continue.",
       });
     }
-    db.guestTokens[tokenKey] = count + 1;
-    saveDB(db);
+    
+    // Increment for both keys to prevent bypassing
+    try {
+      if (guestToken) await dbIncrementGuestLimit(guestToken);
+      if (ip) await dbIncrementGuestLimit(ip);
+    } catch (err) {
+      console.error("Error incrementing guest limits in chat endpoint:", err);
+    }
   }
 
   // ── Session management ───────────────────────────────────────────────────

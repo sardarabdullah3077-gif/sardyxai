@@ -117,44 +117,24 @@ export async function dbSignUp(
 
   if (client) {
     console.log(`[AUTH] Registering ${emailLower} via Supabase Auth`);
-    const isServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // Omit auto-confirm (email_confirm: false) or use signUp to send verification code
+    const { data, error } = await client.auth.signUp({
+      email: emailLower,
+      password,
+      options: { data: { name } },
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Failed to create user via Auth API");
 
-    if (isServiceRole) {
-      const { data, error } = await client.auth.admin.createUser({
-        email: emailLower,
-        password,
-        email_confirm: true,
-        user_metadata: { name },
-      });
-      if (error) throw new Error(error.message);
-      if (!data.user) throw new Error("Failed to create user via Admin API");
-
-      return {
-        id: data.user.id,
-        email: data.user.email!,
-        name: (data.user.user_metadata?.name as string) || name,
-        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
-        createdAt: data.user.created_at,
-        role: "user",
-      };
-    } else {
-      const { data, error } = await client.auth.signUp({
-        email: emailLower,
-        password,
-        options: { data: { name } },
-      });
-      if (error) throw new Error(error.message);
-      if (!data.user) throw new Error("Failed to create user via Auth API");
-
-      return {
-        id: data.user.id,
-        email: data.user.email!,
-        name: (data.user.user_metadata?.name as string) || name,
-        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
-        createdAt: data.user.created_at,
-        role: "user",
-      };
-    }
+    return {
+      id: data.user.id,
+      email: data.user.email!,
+      name: (data.user.user_metadata?.name as string) || name,
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
+      createdAt: data.user.created_at,
+      role: "user",
+      verificationRequired: true,
+    };
   }
 
   // Local fallback
@@ -165,20 +145,30 @@ export async function dbSignUp(
   }
 
   const userId = `usr-local-${Date.now()}`;
+  const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
+
   const newUser = {
     id: userId,
     email: emailLower,
     name,
-    role: "user",
+    role: "user" as const,
     createdAt: new Date().toISOString(),
     avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
     password,
+    emailVerified: false,
+    otpCode: mockOtp,
+    otpExpiry: otpExpiry,
   };
   db.users[emailLower] = newUser;
   saveLocalDB(db);
 
-  const { password: _p, ...safeUser } = newUser;
-  return safeUser;
+  console.log(`\n==================================================`);
+  console.log(`[MOCK OTP] Verification code for ${emailLower} is: ${mockOtp}`);
+  console.log(`==================================================\n`);
+
+  const { password: _p, otpCode: _c, otpExpiry: _e, ...safeUser } = newUser;
+  return { ...safeUser, verificationRequired: true };
 }
 
 export async function dbSignIn(email: string, password: string) {
@@ -191,8 +181,17 @@ export async function dbSignIn(email: string, password: string) {
       email: emailLower,
       password,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.message.toLowerCase().includes("confirm") || error.message.toLowerCase().includes("verify")) {
+        throw new Error("EMAIL_NOT_VERIFIED");
+      }
+      throw new Error(error.message);
+    }
     if (!data.user) throw new Error("Authentication failed");
+
+    if (data.user.identities && data.user.identities.length > 0 && !data.user.email_confirmed_at) {
+      throw new Error("EMAIL_NOT_VERIFIED");
+    }
 
     return {
       id: data.user.id,
@@ -216,7 +215,11 @@ export async function dbSignIn(email: string, password: string) {
     throw new Error("Invalid email or password.");
   }
 
-  const { password: _p, ...safeUser } = user;
+  if (user.emailVerified === false) {
+    throw new Error("EMAIL_NOT_VERIFIED");
+  }
+
+  const { password: _p, otpCode: _c, otpExpiry: _e, ...safeUser } = user;
   return safeUser;
 }
 
@@ -225,12 +228,14 @@ export async function dbGetUserProfile(email: string) {
   const client = sb();
 
   if (client) {
-    // With service role we can look up by email
     try {
       const { data, error } = await client.auth.admin.listUsers();
       if (!error && data?.users) {
         const found = data.users.find((u) => u.email === emailLower);
         if (found) {
+          if (!found.email_confirmed_at) {
+            return null;
+          }
           return {
             id: found.id,
             email: found.email!,
@@ -247,7 +252,6 @@ export async function dbGetUserProfile(email: string) {
       }
     } catch (_) {}
 
-    // Fallback: return a minimal profile derived from email (session still valid)
     return {
       id: `usr-sb-${Buffer.from(emailLower).toString("hex").substring(0, 10)}`,
       email: emailLower,
@@ -260,9 +264,152 @@ export async function dbGetUserProfile(email: string) {
 
   const db = getLocalDB();
   const user = db.users[emailLower];
-  if (!user) return null;
+  if (!user || user.emailVerified === false) return null;
+  const { password: _p, otpCode: _c, otpExpiry: _e, ...safeUser } = user;
+  return safeUser;
+}
+
+export async function dbVerifyOtp(email: string, code: string) {
+  const emailLower = email.toLowerCase().trim();
+  const client = sb();
+
+  if (client) {
+    console.log(`[AUTH] Verifying OTP for ${emailLower} via Supabase`);
+    const { data, error } = await client.auth.verifyOtp({
+      email: emailLower,
+      token: code,
+      type: "signup",
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("OTP verification failed");
+
+    return {
+      id: data.user.id,
+      email: data.user.email!,
+      name:
+        (data.user.user_metadata?.name as string) ||
+        emailLower.split("@")[0],
+      avatarUrl:
+        (data.user.user_metadata?.avatarUrl as string) ||
+        `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
+      createdAt: data.user.created_at,
+      role: "user",
+    };
+  }
+
+  // Local fallback
+  console.log(`[AUTH] Verifying OTP for ${emailLower} via local JSON DB`);
+  const db = getLocalDB();
+  const user = db.users[emailLower];
+  if (!user) {
+    throw new Error("Verification target user not found.");
+  }
+
+  if (user.otpCode !== code) {
+    throw new Error("Invalid verification code. Please try again.");
+  }
+
+  const expiry = new Date(user.otpExpiry).getTime();
+  if (Date.now() > expiry) {
+    throw new Error("Verification code has expired. Please request a new one.");
+  }
+
+  user.emailVerified = true;
+  delete user.otpCode;
+  delete user.otpExpiry;
+  db.users[emailLower] = user;
+  saveLocalDB(db);
+
   const { password: _p, ...safeUser } = user;
   return safeUser;
+}
+
+export async function dbResendOtp(email: string) {
+  const emailLower = email.toLowerCase().trim();
+  const client = sb();
+
+  if (client) {
+    console.log(`[AUTH] Resending OTP to ${emailLower} via Supabase`);
+    const { error } = await client.auth.resend({
+      email: emailLower,
+      type: "signup",
+    });
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
+  // Local fallback
+  console.log(`[AUTH] Resending OTP to ${emailLower} via local JSON DB`);
+  const db = getLocalDB();
+  const user = db.users[emailLower];
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
+
+  user.otpCode = mockOtp;
+  user.otpExpiry = otpExpiry;
+  db.users[emailLower] = user;
+  saveLocalDB(db);
+
+  console.log(`\n==================================================`);
+  console.log(`[MOCK OTP RESEND] New verification code for ${emailLower} is: ${mockOtp}`);
+  console.log(`==================================================\n`);
+
+  return true;
+}
+
+export async function dbGetGuestLimit(identifier: string): Promise<number> {
+  const client = sb();
+  if (client) {
+    try {
+      const { data, error } = await client
+        .from("guest_limits")
+        .select("message_count")
+        .eq("identifier", identifier)
+        .maybeSingle();
+      if (!error && data) {
+        return data.message_count;
+      }
+    } catch (err) {
+      console.error("[DB] Get guest limit error:", err);
+    }
+  }
+
+  const db = getLocalDB();
+  return db.guestTokens[identifier] || 0;
+}
+
+export async function dbIncrementGuestLimit(identifier: string): Promise<number> {
+  const client = sb();
+  if (client) {
+    try {
+      const current = await dbGetGuestLimit(identifier);
+      const nextCount = current + 1;
+      const { data, error } = await client
+        .from("guest_limits")
+        .upsert({
+          identifier,
+          message_count: nextCount,
+          updated_at: new Date().toISOString()
+        })
+        .select("message_count")
+        .single();
+      if (!error && data) {
+        return data.message_count;
+      }
+    } catch (err) {
+      console.error("[DB] Increment guest limit error:", err);
+    }
+  }
+
+  const db = getLocalDB();
+  const nextCount = (db.guestTokens[identifier] || 0) + 1;
+  db.guestTokens[identifier] = nextCount;
+  saveLocalDB(db);
+  return nextCount;
 }
 
 // ---------------------------------------------------------------------------

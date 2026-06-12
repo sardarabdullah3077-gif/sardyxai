@@ -35,7 +35,9 @@ import {
   MicOff,
   MoreVertical,
   Volume2,
-  Square
+  Square,
+  Lock,
+  ArrowRight
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -271,7 +273,7 @@ export default function ChatInterface({
       if (response.ok) {
         const data = await response.json();
         setGuestCount(data.currentCount);
-        if (!user && data.currentCount >= 1) {
+        if (!user && data.currentCount >= 5) {
           setIsLimitBlocked(true);
         } else {
           setIsLimitBlocked(false);
@@ -1275,13 +1277,22 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
             {/* Injected model fallback warning if limits met */}
             {isLimitBlocked ? (
-              <div className="p-3 bg-red-950/20 border border-red-900/30 rounded-2xl flex items-center justify-between text-xs text-red-300 animate-fade-in">
-                <span>Free Sandbox Limit Exceeded. Open account to proceed.</span>
+              <div className="p-6 bg-red-950/10 border border-red-500/20 rounded-2xl text-center space-y-4 max-w-md mx-auto animate-fade-in w-full">
+                <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-400">
+                  <Lock className="w-5 h-5 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-white">Free Guest Limit Reached</h3>
+                  <p className="text-xs text-zinc-400">
+                    You have sent 5/5 free messages. Please Sign Up or Log In to continue using the SARDYX AI playground and access unlimited messages.
+                  </p>
+                </div>
                 <button
                   onClick={onOpenAuth}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition-all cursor-pointer text-[11px]"
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-550 text-white font-semibold rounded-xl text-xs transition-all shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 flex items-center justify-center gap-2 mx-auto cursor-pointer"
                 >
-                  Verify Google Token
+                  <span>Sign Up / Log In</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (

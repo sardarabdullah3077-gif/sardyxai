@@ -57,3 +57,22 @@ SELECT
 FROM pg_tables
 WHERE schemaname = 'public'
   AND tablename IN ('chat_sessions', 'memories');
+
+-- ── guest_limits table for tracking guest user message counts ──
+CREATE TABLE IF NOT EXISTS public.guest_limits (
+  identifier   TEXT        PRIMARY KEY,
+  message_count INTEGER     NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.guest_limits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_all_guest_limits" ON public.guest_limits;
+CREATE POLICY "service_role_all_guest_limits"
+  ON public.guest_limits
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+

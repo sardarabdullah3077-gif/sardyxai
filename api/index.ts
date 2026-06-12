@@ -268,30 +268,135 @@ async function getMemories(email: string) {
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 async function signUp(email: string, password: string, name: string) {
+  const emailLower = email.toLowerCase().trim();
   const client = sb();
   if (client) {
-    const isService = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (isService) {
-      const { data, error } = await client.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name } });
-      if (error) throw new Error(error.message);
-      return { id: data.user!.id, email: data.user!.email!, name, avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`, createdAt: data.user!.created_at, role: "user" };
-    } else {
-      const { data, error } = await client.auth.signUp({ email, password, options: { data: { name } } });
-      if (error) throw new Error(error.message);
-      return { id: data.user!.id, email: data.user!.email!, name, avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`, createdAt: data.user!.created_at, role: "user" };
-    }
+    const { data, error } = await client.auth.signUp({
+      email: emailLower,
+      password,
+      options: { data: { name } },
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Failed to create user via Auth API");
+
+    return {
+      id: data.user.id,
+      email: data.user.email!,
+      name: (data.user.user_metadata?.name as string) || name,
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
+      createdAt: data.user.created_at,
+      role: "user",
+      verificationRequired: true
+    };
   }
   throw new Error("No auth provider configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel env vars.");
 }
 
 async function signIn(email: string, password: string) {
+  const emailLower = email.toLowerCase().trim();
   const client = sb();
   if (client) {
-    const { data, error } = await client.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    return { id: data.user.id, email: data.user.email!, name: (data.user.user_metadata?.name as string) || email.split("@")[0], avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`, createdAt: data.user.created_at, role: "user" };
+    const { data, error } = await client.auth.signInWithPassword({ email: emailLower, password });
+    if (error) {
+      if (error.message.toLowerCase().includes("confirm") || error.message.toLowerCase().includes("verify")) {
+        throw new Error("EMAIL_NOT_VERIFIED");
+      }
+      throw new Error(error.message);
+    }
+    if (!data.user) throw new Error("Authentication failed");
+
+    if (data.user.identities && data.user.identities.length > 0 && !data.user.email_confirmed_at) {
+      throw new Error("EMAIL_NOT_VERIFIED");
+    }
+
+    return {
+      id: data.user.id,
+      email: data.user.email!,
+      name: (data.user.user_metadata?.name as string) || emailLower.split("@")[0],
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
+      createdAt: data.user.created_at,
+      role: "user"
+    };
   }
   throw new Error("No auth provider configured.");
+}
+
+async function verifyOtp(email: string, code: string) {
+  const emailLower = email.toLowerCase().trim();
+  const client = sb();
+  if (client) {
+    const { data, error } = await client.auth.verifyOtp({
+      email: emailLower,
+      token: code,
+      type: "signup"
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Verification failed");
+
+    return {
+      id: data.user.id,
+      email: data.user.email!,
+      name: (data.user.user_metadata?.name as string) || emailLower.split("@")[0],
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
+      createdAt: data.user.created_at,
+      role: "user"
+    };
+  }
+  throw new Error("No auth provider configured.");
+}
+
+async function resendOtp(email: string) {
+  const emailLower = email.toLowerCase().trim();
+  const client = sb();
+  if (client) {
+    const { error } = await client.auth.resend({
+      email: emailLower,
+      type: "signup"
+    });
+    if (error) throw new Error(error.message);
+    return true;
+  }
+  throw new Error("No auth provider configured.");
+}
+
+async function dbGetGuestLimit(identifier: string): Promise<number> {
+  const client = sb();
+  if (client) {
+    try {
+      const { data, error } = await client
+        .from("guest_limits")
+        .select("message_count")
+        .eq("identifier", identifier)
+        .maybeSingle();
+      if (!error && data) {
+        return data.message_count;
+      }
+    } catch (_) {}
+  }
+  return 0;
+}
+
+async function dbIncrementGuestLimit(identifier: string): Promise<number> {
+  const client = sb();
+  if (client) {
+    try {
+      const current = await dbGetGuestLimit(identifier);
+      const nextCount = current + 1;
+      const { data, error } = await client
+        .from("guest_limits")
+        .upsert({
+          identifier,
+          message_count: nextCount,
+          updated_at: new Date().toISOString()
+        })
+        .select("message_count")
+        .single();
+      if (!error && data) {
+        return data.message_count;
+      }
+    } catch (_) {}
+  }
+  return 0;
 }
 
 // ── ROUTES ────────────────────────────────────────────────────────────────────
@@ -337,7 +442,7 @@ app.post(["/api/auth/local-signup", "/auth/local-signup"], async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
     const displayName = name || fullName || email.split("@")[0];
     const user = await signUp(email.toLowerCase().trim(), password, displayName);
-    return res.json({ user, token: user.email });
+    return res.json({ user, verificationRequired: true });
   } catch (err: any) {
     console.error("[AUTH] Signup error:", err.message);
     return res.status(400).json({ error: err.message });
@@ -353,6 +458,35 @@ app.post(["/api/auth/local-login", "/auth/local-login"], async (req, res) => {
     return res.json({ user, token: user.email });
   } catch (err: any) {
     console.error("[AUTH] Login error:", err.message);
+    if (err.message === "EMAIL_NOT_VERIFIED") {
+      return res.status(400).json({ error: "EMAIL_NOT_VERIFIED", email });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// Auth — verify otp
+app.post(["/api/auth/verify-otp", "/auth/verify-otp"], async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ error: "Email and code are required." });
+    const user = await verifyOtp(email, code);
+    return res.json({ user, token: user.email });
+  } catch (err: any) {
+    console.error("[AUTH] Verify OTP error:", err.message);
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// Auth — resend otp
+app.post(["/api/auth/resend-otp", "/api/auth/resend-otp"], async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required." });
+    await resendOtp(email);
+    return res.json({ success: true, message: "Verification code has been resent to your email." });
+  } catch (err: any) {
+    console.error("[AUTH] Resend OTP error:", err.message);
     return res.status(400).json({ error: err.message });
   }
 });
@@ -367,7 +501,7 @@ app.get(["/api/auth/session", "/auth/session"], async (req, res) => {
   try {
     const { data } = await client.auth.admin.listUsers();
     const found = data?.users?.find((u: any) => u.email === email);
-    if (found) return res.json({ session: { user: { id: found.id, email: found.email, name: found.user_metadata?.name || email.split("@")[0], role: "user", avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}` } } });
+    if (found && found.email_confirmed_at) return res.json({ session: { user: { id: found.id, email: found.email, name: found.user_metadata?.name || email.split("@")[0], role: "user", avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}` } } });
   } catch (_) {}
   return res.json({ session: null });
 });
@@ -467,19 +601,54 @@ app.get(["/api/models", "/models"], async (_req, res) => {
 });
 
 // Security
-app.post(["/api/security/check-guest-limit", "/security/check-guest-limit"], (req, res) => {
-  // On Vercel serverless, we can't persist guest state easily — allow 1 guest message
-  return res.json({ allowed: true, currentCount: 0 });
+app.post(["/api/security/check-guest-limit", "/security/check-guest-limit"], async (req, res) => {
+  const { guestToken } = req.body;
+  const ip = (req.headers["x-forwarded-for"] as string) || req.socket?.remoteAddress || "unknown";
+  
+  let countToken = 0;
+  let countIp = 0;
+  try {
+    if (guestToken) countToken = await dbGetGuestLimit(guestToken);
+    if (ip) countIp = await dbGetGuestLimit(ip);
+  } catch (_) {}
+  
+  const count = Math.max(countToken, countIp);
+  return res.json({ allowed: count < 5, currentCount: count });
 });
 
 // ── MAIN CHAT INFERENCE ENDPOINT ─────────────────────────────────────────────
 app.post(["/api/chats/:id/messages", "/chats/:id/messages"], async (req, res) => {
   const t0 = Date.now();
-  const { message, modelMode, customInstructions } = req.body;
+  const { message, guestToken, modelMode, customInstructions } = req.body;
   const sessionId = req.params.id;
   const userEmail = req.headers.authorization?.replace("Bearer ", "").trim() || null;
 
   if (!message?.content?.trim()) return res.status(400).json({ error: "Message content is required" });
+
+  const ip = (req.headers["x-forwarded-for"] as string) || req.socket?.remoteAddress || "unknown";
+
+  // ── Guest rate limiting ──────────────────────────────────────────────────
+  if (!userEmail) {
+    let countToken = 0;
+    let countIp = 0;
+    try {
+      if (guestToken) countToken = await dbGetGuestLimit(guestToken);
+      if (ip) countIp = await dbGetGuestLimit(ip);
+    } catch (_) {}
+    const count = Math.max(countToken, countIp);
+    if (count >= 5) {
+      return res.status(403).json({
+        error: "GUEST_LIMIT_REACHED",
+        message: "You have used your 5 free guest messages. Please Sign Up or Log In to continue.",
+      });
+    }
+    
+    // Increment for both keys to prevent bypassing
+    try {
+      if (guestToken) await dbIncrementGuestLimit(guestToken);
+      if (ip) await dbIncrementGuestLimit(ip);
+    } catch (_) {}
+  }
 
   // Model selection
   const content = message.content.toLowerCase();

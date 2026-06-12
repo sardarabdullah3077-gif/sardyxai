@@ -243,6 +243,24 @@ html {
     @apply bg-zinc-800/20;
   }
 
+  /* Text selection styling for better visibility */
+  .select-text {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+  }
+
+  .select-text::selection {
+    background-color: rgba(99, 102, 241, 0.5);
+    color: inherit;
+  }
+
+  .select-text *::selection {
+    background-color: rgba(99, 102, 241, 0.5);
+    color: inherit;
+  }
+
   /* Mobile optimizations */
   @media (max-width: 640px) {
     .prose-premium h1 {

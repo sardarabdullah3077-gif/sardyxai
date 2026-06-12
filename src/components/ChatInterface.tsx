@@ -888,7 +888,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         </header>
 
         {/* MESSAGES LOG CONSOLE */}
-        <section id="chat-messages-scroll" className="flex-1 overflow-y-auto px-6 py-8 space-y-6 relative z-0 scrollbar-premium scroll-smooth">
+        <section id="chat-messages-scroll" className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6 relative z-0 scrollbar-premium scroll-smooth">
           
           {/* Guest message limits notification banner */}
           {!user && guestCount >= 1 && (
@@ -919,12 +919,12 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   <img 
                     src={sardyxLogo} 
                     alt="SARDYX AI" 
-                    className="w-9 h-9 rounded-xl object-contain shrink-0 shadow-md shadow-indigo-500/15 border border-white/5 p-0.5 bg-black animate-[pulse_3s_infinite]"
+                    className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl object-contain shrink-0 shadow-md shadow-indigo-500/15 border border-white/5 p-0.5 bg-black animate-[pulse_3s_infinite]"
                     referrerPolicy="no-referrer"
                   />
                 )}
 
-                <div className={`p-5 rounded-2xl border flex flex-col justify-between gap-1.5 leading-relaxed text-xs sm:text-sm max-w-[85%] relative group ${
+                <div className={`p-3 sm:p-5 rounded-2xl border flex flex-col justify-between gap-1.5 leading-relaxed text-xs sm:text-sm max-w-[95%] sm:max-w-[85%] relative group select-text ${
                   msg.role === 'user' 
                     ? 'bg-zinc-900/60 border-white/5 text-zinc-100' 
                     : 'bg-[#0a0a0a] border-white/5 text-zinc-200'
@@ -1034,7 +1034,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   )}
 
                   {/* MAIN Markdowns output renderer with premium styling */}
-                  <div className="prose-premium text-zinc-200">
+                  <div className="prose-premium text-zinc-200 select-text">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -1144,7 +1144,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         </section>
 
         {/* INPUT LAYOUT CONTROLLER */}
-        <section id="chat-input-layout" className="p-6 border-t border-white/5 bg-[#050505] shrink-0">
+        <section id="chat-input-layout" className="p-3 sm:p-6 border-t border-white/5 bg-[#050505] shrink-0">
           <div className="max-w-3xl mx-auto space-y-3 relative">
             
             {/* Displaying attachment preview state if selected */}
@@ -1212,7 +1212,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSendMessage} className="relative z-10 flex items-center gap-2 border border-white/5 bg-zinc-900/40 hover:border-white/10 p-2 rounded-2xl focus-within:border-indigo-500 transition-all">
+              <form onSubmit={handleSendMessage} className="relative z-10 flex flex-col sm:flex-row items-center gap-2 sm:gap-2 border border-white/5 bg-zinc-900/40 hover:border-white/10 p-2 sm:p-2 rounded-2xl focus-within:border-indigo-500 transition-all">
                 <input 
                   type="file"
                   ref={fileInputRef}
@@ -1224,7 +1224,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                 <button
                   type="button"
                   onClick={handleFileUploadClick}
-                  className="p-2.5 bg-black border border-white/5 hover:border-white/10 text-zinc-400 hover:text-white rounded-xl cursor-pointer transition-colors"
+                  className="p-2 sm:p-2.5 bg-black border border-white/5 hover:border-white/10 text-zinc-400 hover:text-white rounded-xl cursor-pointer transition-colors shrink-0 sm:flex-shrink-0"
                   title="Upload diagram scan or raw text (doc, txt, csv, spreadsheet, pdf)"
                 >
                   <FileUp className="w-4 h-4 text-zinc-400" />
@@ -1236,13 +1236,13 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   value={inputPrompt}
                   onChange={(e) => setInputPrompt(e.target.value)}
                   disabled={loading}
-                  className="w-full bg-transparent px-2.5 py-3 text-sm text-zinc-100 placeholder-zinc-550 outline-none w-full"
+                  className="w-full sm:flex-1 bg-transparent px-2 sm:px-2.5 py-2.5 sm:py-3 text-sm text-zinc-100 placeholder-zinc-550 outline-none"
                 />
 
                 <button
                   type="button"
                   onClick={handleMicClick}
-                  className={`p-2.5 border rounded-xl cursor-pointer transition-all shrink-0 ${
+                  className={`p-2 sm:p-2.5 border rounded-xl cursor-pointer transition-all shrink-0 sm:flex-shrink-0 ${
                     isRecording 
                       ? "bg-red-650 border-red-500 text-white animate-pulse" 
                       : "bg-black border-white/5 hover:border-white/10 text-zinc-400 hover:text-white"
@@ -1260,7 +1260,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                 <button
                   type="submit"
                   disabled={loading || (!inputPrompt.trim() && !fileAttachment)}
-                  className="p-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:border-white/5 disabled:text-zinc-650 text-white rounded-xl shrink-0 cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all"
+                  className="w-full sm:w-auto p-2.5 sm:p-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:border-white/5 disabled:text-zinc-650 text-white rounded-xl shrink-0 cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all flex items-center justify-center"
                 >
                   <Send className="w-4 h-4" />
                 </button>

@@ -163,6 +163,45 @@ export default function ChatInterface({
     return 'en-US';
   };
 
+  // Strip markdown syntax for clean text-to-speech
+  const cleanMarkdownForSpeech = (text: string): string => {
+    let cleaned = text;
+    
+    // Remove heading markers (# ## ### etc)
+    cleaned = cleaned.replace(/^#{1,6}\s+/gm, '');
+    
+    // Remove bold and italic markers (**text** or __text__)
+    cleaned = cleaned.replace(/\*\*(.+?)\*\*/g, '$1');
+    cleaned = cleaned.replace(/__(.+?)__/g, '$1');
+    
+    // Remove italic markers (*text* or _text_)
+    cleaned = cleaned.replace(/\*(.+?)\*/g, '$1');
+    cleaned = cleaned.replace(/_(.+?)_/g, '$1');
+    
+    // Remove strikethrough (~~text~~)
+    cleaned = cleaned.replace(/~~(.+?)~~/g, '$1');
+    
+    // Remove inline code backticks (`code`)
+    cleaned = cleaned.replace(/`(.+?)`/g, '$1');
+    
+    // Convert markdown links [text](url) to just text
+    cleaned = cleaned.replace(/\[(.+?)\]\(.+?\)/g, '$1');
+    
+    // Remove blockquote markers (>)
+    cleaned = cleaned.replace(/^>\s+/gm, '');
+    
+    // Remove list markers (-, *, +) at line start
+    cleaned = cleaned.replace(/^[-*+]\s+/gm, '');
+    
+    // Remove code block markers (```)
+    cleaned = cleaned.replace(/```[\s\S]*?```/g, 'code block');
+    
+    // Remove multiple spaces and clean up whitespace
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    return cleaned;
+  };
+
   // Text-to-Speech Functions
   const stopReading = () => {
     window.speechSynthesis.cancel();
@@ -175,11 +214,14 @@ export default function ChatInterface({
       stopReading();
     }
 
+    // Clean markdown syntax from text before speaking
+    const cleanText = cleanMarkdownForSpeech(text);
+
     // Detect language and set appropriate locale
-    const detectedLanguage = detectLanguage(text);
+    const detectedLanguage = detectLanguage(cleanText);
 
     // Create and speak
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = detectedLanguage;
     utterance.rate = 1;
     utterance.pitch = 1;

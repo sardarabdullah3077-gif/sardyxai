@@ -1269,7 +1269,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSendMessage} className="relative z-10 w-full space-y-2.5 sm:space-y-0">
+              <form onSubmit={handleSendMessage} className="relative z-10 w-full flex flex-col gap-2.5 md:gap-0">
                 <input 
                   type="file"
                   ref={fileInputRef}
@@ -1278,7 +1278,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   className="hidden"
                 />
                 
-                {/* Top row: File upload and Text input */}
+                {/* Top row: File upload, Text input, and Mic (all on one line) */}
                 <div className="flex items-center gap-2 sm:gap-2.5 w-full border border-white/5 bg-zinc-900/40 hover:border-white/10 p-2 sm:p-2.5 rounded-2xl focus-within:border-indigo-500 transition-all">
                   <button
                     type="button"
@@ -1315,16 +1315,26 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                       <Mic className="w-4 h-4" />
                     )}
                   </button>
+
+                  {/* Send button on same line as input on desktop */}
+                  <button
+                    type="submit"
+                    disabled={loading || (!inputPrompt.trim() && !fileAttachment)}
+                    className="hidden md:flex p-2 md:p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:text-zinc-650 text-white font-medium rounded-lg cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all items-center justify-center gap-2 shrink-0"
+                    title="Send message"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
                 </div>
 
-                {/* Bottom row: Send button (full width on mobile, inline on desktop) */}
+                {/* Send button (full width on mobile only) */}
                 <button
                   type="submit"
                   disabled={loading || (!inputPrompt.trim() && !fileAttachment)}
-                  className="w-full md:w-auto px-6 py-2.5 md:py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:text-zinc-650 text-white font-medium rounded-xl cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 text-sm md:text-base"
+                  className="md:hidden w-full px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:text-zinc-650 text-white font-medium rounded-xl cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 text-sm"
                 >
                   <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">Send</span>
+                  <span>Send</span>
                 </button>
               </form>
             )}

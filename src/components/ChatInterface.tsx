@@ -214,9 +214,25 @@ export default function ChatInterface({
       stopReading();
     }
 
-    // Detect language from original text BEFORE cleaning
-    // This ensures proper accent detection for Urdu/Hindi/English responses
-    const detectedLanguage = detectLanguage(text);
+    // Detect language from USER'S QUERY, not the response
+    // Find the user's message that came before this response
+    let userMessageText = '';
+    if (activeSession?.messages) {
+      const messageIndex = activeSession.messages.findIndex(m => m.id === messageId);
+      if (messageIndex > 0) {
+        // Look for the previous user message
+        for (let i = messageIndex - 1; i >= 0; i--) {
+          if (activeSession.messages[i].role === 'user') {
+            userMessageText = activeSession.messages[i].content;
+            break;
+          }
+        }
+      }
+    }
+
+    // Detect language from user's query (or response if no user message found)
+    const textToDetect = userMessageText || text;
+    const detectedLanguage = detectLanguage(textToDetect);
 
     // Clean markdown syntax from text before speaking
     const cleanText = cleanMarkdownForSpeech(text);

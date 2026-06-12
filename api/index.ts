@@ -271,6 +271,12 @@ async function signUp(email: string, password: string, name: string) {
   const emailLower = email.toLowerCase().trim();
   const client = sb();
   if (client) {
+    // Check if email already exists
+    const { data: existingUsers } = await client.auth.admin.listUsers();
+    if (existingUsers?.users?.some((u: any) => u.email === emailLower)) {
+      throw new Error("An account with this email already exists. Please sign in.");
+    }
+
     const { data, error } = await client.auth.signUp({
       email: emailLower,
       password,

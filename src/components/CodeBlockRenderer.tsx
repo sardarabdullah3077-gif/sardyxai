@@ -69,61 +69,65 @@ export default function CodeBlockRenderer({ inline, className, children }: CodeB
   return (
     <div className="my-4 rounded-xl overflow-hidden border border-white/10 bg-[#0a0a0a] shadow-lg">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[#111] border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="flex gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
-            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
-            <div className="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
-          </div>
-          
-          {isPreviewable && (
-            <div className="flex items-center gap-1 bg-black/50 p-0.5 rounded-lg border border-white/5 ml-2">
-              <button
-                onClick={() => setActiveTab('code')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[10px] font-medium transition-all ${
-                  activeTab === 'code' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                <Code className="w-3 h-3" />
-                Code
-              </button>
-              <button
-                onClick={() => setActiveTab('preview')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[10px] font-medium transition-all ${
-                  activeTab === 'preview' ? 'bg-indigo-600/20 text-indigo-400 shadow-sm border border-indigo-500/20' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                <Eye className="w-3 h-3" />
-                Preview
-              </button>
-            </div>
-          )}
-
-          {!isPreviewable && (
-            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest ml-2 flex items-center gap-1.5">
-              <Terminal className="w-3 h-3" />
-              {language || 'text'}
-            </span>
-          )}
+      <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 sm:px-4 sm:py-2 bg-[#111] border-b border-white/5">
+        {/* Left: dots */}
+        <div className="flex gap-1 shrink-0">
+          <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-500/80"></div>
+          <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-yellow-500/80"></div>
+          <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-green-500/80"></div>
         </div>
+        
+        {/* Middle: tabs or language */}
+        {isPreviewable && (
+          <div className="flex items-center gap-0.5 bg-black/50 p-0.5 rounded-lg border border-white/5">
+            <button
+              onClick={() => setActiveTab('code')}
+              className={`flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1 rounded-md text-[10px] font-medium transition-all ${
+                activeTab === 'code' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Code className="w-3 h-3" />
+              Code
+            </button>
+            <button
+              onClick={() => setActiveTab('preview')}
+              className={`flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1 rounded-md text-[10px] font-medium transition-all ${
+                activeTab === 'preview' ? 'bg-indigo-600/20 text-indigo-400 shadow-sm border border-indigo-500/20' : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Eye className="w-3 h-3" />
+              Preview
+            </button>
+          </div>
+        )}
 
-        <button
-          onClick={copyToClipboard}
-          className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 hover:text-white transition-colors p-1"
-          title="Copy code"
-        >
-          {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        {!isPreviewable && (
+          <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+            <Terminal className="w-3 h-3" />
+            {language || 'text'}
+          </span>
+        )}
 
-        <button
-          onClick={() => setIsFullScreen(true)}
-          className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 hover:text-white transition-colors p-1 ml-2"
-          title="Full screen"
-        >
-          <Maximize2 className="w-3 h-3" />
-        </button>
+        {/* Right: copy + maximize — always visible */}
+        <div className="flex items-center gap-0.5 sm:gap-1 ml-auto shrink-0">
+          <button
+            onClick={copyToClipboard}
+            className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 hover:text-white transition-colors p-1 rounded hover:bg-white/10"
+            title="Copy code"
+          >
+            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+
+          <button
+            onClick={() => setIsFullScreen(true)}
+            className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors rounded"
+            title="Full screen"
+            aria-label="Full screen preview"
+          >
+            <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Body content */}

@@ -29,6 +29,7 @@ import {
   dbSignUp,
   dbSignIn,
   dbGetUserProfile,
+  dbEmailExists,
   dbGetSessions,
   dbCreateSession,
   dbUpdateSession,
@@ -129,6 +130,8 @@ app.post(["/api/auth/local-signup", "/auth/local-signup"], async (req, res) => {
   try {
     const { email, password, fullName, name } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
+    const exists = await dbEmailExists(email);
+    if (exists) return res.status(400).json({ error: "An account with this email already exists. Please sign in." });
     const displayName = name || fullName || email.split("@")[0];
     const user = await dbSignUp(email, password, displayName);
     addAuditLog("auth", `Account registered: ${user.email}`, user.email, getClientIp(req));

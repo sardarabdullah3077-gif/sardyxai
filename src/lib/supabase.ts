@@ -107,6 +107,24 @@ function sb(): SupabaseClient | null {
 // ---------------------------------------------------------------------------
 // AUTH
 // ---------------------------------------------------------------------------
+export async function dbEmailExists(email: string): Promise<boolean> {
+  const emailLower = email.toLowerCase().trim();
+  const client = sb();
+
+  if (client) {
+    try {
+      const { data } = await client.auth.admin.listUsers();
+      return data?.users?.some((u: any) => u.email === emailLower) || false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Local fallback
+  const db = getLocalDB();
+  return !!db.users[emailLower];
+}
+
 export async function dbSignUp(
   email: string,
   password: string,

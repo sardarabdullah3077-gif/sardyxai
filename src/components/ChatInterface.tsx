@@ -116,6 +116,21 @@ export default function ChatInterface({
     };
   }, [readingMessageId]);
 
+  // Close menu when clicking outside on mobile
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (openMenuMessageId && !target.closest('[data-menu-container]') && !target.closest('button[title="Message options"]')) {
+        setOpenMenuMessageId(null);
+      }
+    };
+
+    if (openMenuMessageId) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [openMenuMessageId]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -916,7 +931,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                 }`}>
                   
                   {/* Message Actions Menu */}
-                  <div className="absolute right-3.5 top-3.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 items-center">
+                  <div className="absolute right-3.5 top-3.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-1 items-center">
                     {/* Read Aloud Menu */}
                     <div className="relative">
                       <button
@@ -929,7 +944,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
                       {/* Dropdown Menu */}
                       {openMenuMessageId === msg.id && msg.role !== 'user' && (
-                        <div className="absolute right-0 top-full mt-2 bg-zinc-900 border border-white/10 rounded-lg shadow-lg z-50 min-w-[160px] overflow-hidden">
+                        <div className="absolute right-0 top-full mt-2 bg-zinc-900 border border-white/10 rounded-lg shadow-lg z-50 min-w-[160px] overflow-hidden md:w-max" data-menu-container>
                           <button
                             onClick={() => startReadAloud(msg.id, msg.content)}
                             className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2 transition-all ${

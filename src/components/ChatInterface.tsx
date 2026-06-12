@@ -135,6 +135,34 @@ export default function ChatInterface({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Detect text language - Urdu, Hindi, or English
+  const detectLanguage = (text: string): string => {
+    // Check for Urdu script (Arabic/Persian characters)
+    const urduPattern = /[\u0600-\u06FF]/g;
+    const urduMatches = text.match(urduPattern) || [];
+    
+    // Check for Hindi script (Devanagari characters)
+    const hindiPattern = /[\u0900-\u097F]/g;
+    const hindiMatches = text.match(hindiPattern) || [];
+    
+    const totalChars = text.length;
+    const urduRatio = urduMatches.length / totalChars;
+    const hindiRatio = hindiMatches.length / totalChars;
+    
+    // If more than 20% of text is in Urdu script
+    if (urduRatio > 0.2) {
+      return 'ur-PK'; // Urdu (Pakistan)
+    }
+    
+    // If more than 20% of text is in Hindi script
+    if (hindiRatio > 0.2) {
+      return 'hi-IN'; // Hindi (India)
+    }
+    
+    // Default to English
+    return 'en-US';
+  };
+
   // Text-to-Speech Functions
   const stopReading = () => {
     window.speechSynthesis.cancel();
@@ -147,8 +175,12 @@ export default function ChatInterface({
       stopReading();
     }
 
+    // Detect language and set appropriate locale
+    const detectedLanguage = detectLanguage(text);
+
     // Create and speak
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = detectedLanguage;
     utterance.rate = 1;
     utterance.pitch = 1;
     utterance.volume = 1;

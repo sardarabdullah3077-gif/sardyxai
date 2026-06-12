@@ -939,11 +939,11 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             </div>
           )}
 
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div className="max-w-3xl mx-auto w-full space-y-4 sm:space-y-6">
             {activeSession?.messages.map((msg, idx) => (
               <div 
                 key={msg.id || idx} 
-                className={`flex gap-4 items-start animate-fade-in ${
+                className={`flex gap-2 sm:gap-4 items-start animate-fade-in w-full ${
                   msg.role === 'user' ? 'justify-end' : 'justify-start'
                 }`}
               >
@@ -951,12 +951,12 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   <img 
                     src={sardyxLogo} 
                     alt="SARDYX AI" 
-                    className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl object-contain shrink-0 shadow-md shadow-indigo-500/15 border border-white/5 p-0.5 bg-black animate-[pulse_3s_infinite]"
+                    className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg object-contain shrink-0 shadow-md shadow-indigo-500/15 border border-white/5 p-0.5 bg-black animate-[pulse_3s_infinite] mt-1"
                     referrerPolicy="no-referrer"
                   />
                 )}
 
-                <div className={`p-3 sm:p-5 rounded-2xl border flex flex-col justify-between gap-1.5 leading-relaxed text-xs sm:text-sm max-w-[95%] sm:max-w-[85%] relative group select-text ${
+                <div className={`p-3 sm:p-4 rounded-xl border flex flex-col justify-between gap-1.5 leading-relaxed text-xs sm:text-sm w-full sm:max-w-[85%] max-w-[100%] relative group select-text break-words ${
                   msg.role === 'user' 
                     ? 'bg-zinc-900/60 border-white/5 text-zinc-100' 
                     : 'bg-[#0a0a0a] border-white/5 text-zinc-200'
@@ -1226,7 +1226,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSendMessage} className="relative z-10 flex flex-col sm:flex-row items-center gap-2 sm:gap-2 border border-white/5 bg-zinc-900/40 hover:border-white/10 p-2 sm:p-2 rounded-2xl focus-within:border-indigo-500 transition-all">
+              <form onSubmit={handleSendMessage} className="relative z-10 w-full space-y-2.5 sm:space-y-0">
                 <input 
                   type="file"
                   ref={fileInputRef}
@@ -1235,48 +1235,53 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   className="hidden"
                 />
                 
-                <button
-                  type="button"
-                  onClick={handleFileUploadClick}
-                  className="p-2 sm:p-2.5 bg-black border border-white/5 hover:border-white/10 text-zinc-400 hover:text-white rounded-xl cursor-pointer transition-colors shrink-0 sm:flex-shrink-0"
-                  title="Upload diagram scan or raw text (doc, txt, csv, spreadsheet, pdf)"
-                >
-                  <FileUp className="w-4 h-4 text-zinc-400" />
-                </button>
+                {/* Top row: File upload and Text input */}
+                <div className="flex items-center gap-2 sm:gap-2.5 w-full border border-white/5 bg-zinc-900/40 hover:border-white/10 p-2 sm:p-2.5 rounded-2xl focus-within:border-indigo-500 transition-all">
+                  <button
+                    type="button"
+                    onClick={handleFileUploadClick}
+                    className="p-2 sm:p-2.5 bg-black border border-white/5 hover:border-white/10 text-zinc-400 hover:text-white rounded-lg cursor-pointer transition-colors shrink-0 hover:bg-zinc-900"
+                    title="Upload diagram scan or raw text (doc, txt, csv, spreadsheet, pdf)"
+                  >
+                    <FileUp className="w-4 h-4" />
+                  </button>
 
-                <input
-                  type="text"
-                  placeholder={isRecording ? "🎙️ Listening..." : "Message SARDYX AI..."}
-                  value={inputPrompt}
-                  onChange={(e) => setInputPrompt(e.target.value)}
-                  disabled={loading}
-                  className="w-full sm:flex-1 bg-transparent px-2 sm:px-2.5 py-2.5 sm:py-3 text-sm text-zinc-100 placeholder-zinc-550 outline-none"
-                />
+                  <input
+                    type="text"
+                    placeholder={isRecording ? "🎙️ Listening..." : "Message SARDYX AI..."}
+                    value={inputPrompt}
+                    onChange={(e) => setInputPrompt(e.target.value)}
+                    disabled={loading}
+                    className="flex-1 bg-transparent px-2.5 py-2.5 sm:py-3 text-sm text-zinc-100 placeholder-zinc-550 outline-none min-w-0"
+                  />
 
-                <button
-                  type="button"
-                  onClick={handleMicClick}
-                  className={`p-2 sm:p-2.5 border rounded-xl cursor-pointer transition-all shrink-0 sm:flex-shrink-0 ${
-                    isRecording 
-                      ? "bg-red-650 border-red-500 text-white animate-pulse" 
-                      : "bg-black border-white/5 hover:border-white/10 text-zinc-400 hover:text-white"
-                  }`}
-                  title={isRecording ? "Stop listening" : "Voice to text (Microphone)"}
-                  disabled={loading}
-                >
-                  {isRecording ? (
-                    <MicOff className="w-4 h-4 text-white" />
-                  ) : (
-                    <Mic className="w-4 h-4" />
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleMicClick}
+                    className={`p-2 sm:p-2.5 border rounded-lg cursor-pointer transition-all shrink-0 hover:bg-zinc-900 ${
+                      isRecording 
+                        ? "bg-red-650 border-red-500 text-white animate-pulse" 
+                        : "bg-black border-white/5 hover:border-white/10 text-zinc-400 hover:text-white"
+                    }`}
+                    title={isRecording ? "Stop listening" : "Voice to text (Microphone)"}
+                    disabled={loading}
+                  >
+                    {isRecording ? (
+                      <MicOff className="w-4 h-4 text-white" />
+                    ) : (
+                      <Mic className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
 
+                {/* Bottom row: Send button (full width on mobile, auto on desktop) */}
                 <button
                   type="submit"
                   disabled={loading || (!inputPrompt.trim() && !fileAttachment)}
-                  className="w-full sm:w-auto p-2.5 sm:p-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:border-white/5 disabled:text-zinc-650 text-white rounded-xl shrink-0 cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all flex items-center justify-center"
+                  className="w-full sm:w-auto px-6 py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:text-zinc-650 text-white font-medium rounded-xl cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 hover:bg-indigo-500 text-sm"
                 >
                   <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">Send</span>
                 </button>
               </form>
             )}

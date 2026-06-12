@@ -286,7 +286,6 @@ async function signUp(email: string, password: string, name: string) {
       avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
       createdAt: data.user.created_at,
       role: "user",
-      verificationRequired: true
     };
   }
   throw new Error("No auth provider configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel env vars.");
@@ -297,18 +296,9 @@ async function signIn(email: string, password: string) {
   const client = sb();
   if (client) {
     const { data, error } = await client.auth.signInWithPassword({ email: emailLower, password });
-    if (error) {
-      if (error.message.toLowerCase().includes("confirm") || error.message.toLowerCase().includes("verify")) {
-        throw new Error("EMAIL_NOT_VERIFIED");
-      }
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
     if (!data.user) throw new Error("Authentication failed");
 
-    if (data.user.identities && data.user.identities.length > 0 && !data.user.email_confirmed_at) {
-      throw new Error("EMAIL_NOT_VERIFIED");
-    }
-
     return {
       id: data.user.id,
       email: data.user.email!,
@@ -317,44 +307,6 @@ async function signIn(email: string, password: string) {
       createdAt: data.user.created_at,
       role: "user"
     };
-  }
-  throw new Error("No auth provider configured.");
-}
-
-async function verifyOtp(email: string, code: string) {
-  const emailLower = email.toLowerCase().trim();
-  const client = sb();
-  if (client) {
-    const { data, error } = await client.auth.verifyOtp({
-      email: emailLower,
-      token: code,
-      type: "signup"
-    });
-    if (error) throw new Error(error.message);
-    if (!data.user) throw new Error("Verification failed");
-
-    return {
-      id: data.user.id,
-      email: data.user.email!,
-      name: (data.user.user_metadata?.name as string) || emailLower.split("@")[0],
-      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(emailLower)}`,
-      createdAt: data.user.created_at,
-      role: "user"
-    };
-  }
-  throw new Error("No auth provider configured.");
-}
-
-async function resendOtp(email: string) {
-  const emailLower = email.toLowerCase().trim();
-  const client = sb();
-  if (client) {
-    const { error } = await client.auth.resend({
-      email: emailLower,
-      type: "signup"
-    });
-    if (error) throw new Error(error.message);
-    return true;
   }
   throw new Error("No auth provider configured.");
 }
@@ -442,7 +394,7 @@ app.post(["/api/auth/local-signup", "/auth/local-signup"], async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
     const displayName = name || fullName || email.split("@")[0];
     const user = await signUp(email.toLowerCase().trim(), password, displayName);
-    return res.json({ user, verificationRequired: true });
+    return res.json({ user, token: user.email });
   } catch (err: any) {
     console.error("[AUTH] Signup error:", err.message);
     return res.status(400).json({ error: err.message });
@@ -458,35 +410,6 @@ app.post(["/api/auth/local-login", "/auth/local-login"], async (req, res) => {
     return res.json({ user, token: user.email });
   } catch (err: any) {
     console.error("[AUTH] Login error:", err.message);
-    if (err.message === "EMAIL_NOT_VERIFIED") {
-      return res.status(400).json({ error: "EMAIL_NOT_VERIFIED", email });
-    }
-    return res.status(400).json({ error: err.message });
-  }
-});
-
-// Auth — verify otp
-app.post(["/api/auth/verify-otp", "/auth/verify-otp"], async (req, res) => {
-  try {
-    const { email, code } = req.body;
-    if (!email || !code) return res.status(400).json({ error: "Email and code are required." });
-    const user = await verifyOtp(email, code);
-    return res.json({ user, token: user.email });
-  } catch (err: any) {
-    console.error("[AUTH] Verify OTP error:", err.message);
-    return res.status(400).json({ error: err.message });
-  }
-});
-
-// Auth — resend otp
-app.post(["/api/auth/resend-otp", "/auth/resend-otp"], async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email is required." });
-    await resendOtp(email);
-    return res.json({ success: true, message: "Verification code has been resent to your email." });
-  } catch (err: any) {
-    console.error("[AUTH] Resend OTP error:", err.message);
     return res.status(400).json({ error: err.message });
   }
 });
@@ -501,51 +424,13 @@ app.get(["/api/auth/session", "/auth/session"], async (req, res) => {
   try {
     const { data } = await client.auth.admin.listUsers();
     const found = data?.users?.find((u: any) => u.email === email);
-    if (found && found.email_confirmed_at) return res.json({ session: { user: { id: found.id, email: found.email, name: found.user_metadata?.name || email.split("@")[0], role: "user", avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}` } } });
+    if (found) return res.json({ session: { user: { id: found.id, email: found.email, name: found.user_metadata?.name || email.split("@")[0], role: "user", avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}` } } });
   } catch (_) {}
   return res.json({ session: null });
 });
 
 // Auth — logout
 app.post(["/api/auth/logout", "/auth/logout"], (_req, res) => res.json({ success: true }));
-
-// Auth — Google OAuth URL
-app.get(["/api/auth/google", "/auth/google"], async (req, res) => {
-  const client = sb();
-  if (!client) return res.status(500).json({ error: "Auth provider not configured" });
-  try {
-    const { data, error } = await client.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${req.headers.origin || 'https://sardyxai.eu.cc'}/`
-      }
-    });
-    if (error) throw new Error(error.message);
-    return res.json({ url: data.url });
-  } catch (err: any) {
-    console.error("[AUTH] Google OAuth error:", err.message);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// Auth — Google OAuth callback (handles the redirect)
-app.get(["/api/auth/callback", "/auth/callback"], async (req, res) => {
-  const client = sb();
-  if (!client) return res.redirect('/');
-  try {
-    const code = req.query.code as string;
-    if (code) {
-      await client.auth.exchangeCodeForSession(code);
-    }
-    const hash = req.query.hash as string;
-    if (hash) {
-      // Process hash-based auth (some Supabase flows use this)
-    }
-  } catch (err: any) {
-    console.error("[AUTH] Callback error:", err.message);
-  }
-  return res.redirect('/');
-});
 
 // Profile sync
 app.post(["/api/auth/login", "/auth/login"], async (req, res) => {

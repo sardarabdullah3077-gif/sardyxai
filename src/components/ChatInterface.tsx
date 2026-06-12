@@ -996,7 +996,7 @@ Just type your message to get started.`,
                 onClick={onOpenAuth}
                 className="mt-2.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 hover:text-white text-xs font-medium rounded-xl transition-all cursor-pointer shadow-md shadow-indigo-600/15"
               >
-                Sign In instantly with Google
+                Sign In to Continue
               </button>
             </div>
           )}

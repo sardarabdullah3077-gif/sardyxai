@@ -214,13 +214,14 @@ export default function ChatInterface({
       stopReading();
     }
 
+    // Detect language from original text BEFORE cleaning
+    // This ensures proper accent detection for Urdu/Hindi/English responses
+    const detectedLanguage = detectLanguage(text);
+
     // Clean markdown syntax from text before speaking
     const cleanText = cleanMarkdownForSpeech(text);
 
-    // Detect language and set appropriate locale
-    const detectedLanguage = detectLanguage(cleanText);
-
-    // Create and speak
+    // Create and speak with clean text but detected language from original
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = detectedLanguage;
     utterance.rate = 1;
@@ -1316,11 +1317,11 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                   </button>
                 </div>
 
-                {/* Bottom row: Send button (full width on mobile, auto on desktop) */}
+                {/* Bottom row: Send button (full width on mobile, inline on desktop) */}
                 <button
                   type="submit"
                   disabled={loading || (!inputPrompt.trim() && !fileAttachment)}
-                  className="w-full sm:w-auto px-6 py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:text-zinc-650 text-white font-medium rounded-xl cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 hover:bg-indigo-500 text-sm"
+                  className="w-full md:w-auto px-6 py-2.5 md:py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:text-zinc-650 text-white font-medium rounded-xl cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 text-sm md:text-base"
                 >
                   <Send className="w-4 h-4" />
                   <span className="hidden sm:inline">Send</span>

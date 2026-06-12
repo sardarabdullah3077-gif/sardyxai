@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import sardyxLogo from '../assets/images/sx_logo.jpg';
-import { 
+import {
   Bot, 
   Send, 
   Plus, 
@@ -32,7 +32,10 @@ import {
   RotateCw,
   Copy,
   Mic,
-  MicOff
+  MicOff,
+  MoreVertical,
+  Volume2,
+  Square
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -72,6 +75,11 @@ export default function ChatInterface({
   const [permissionModalError, setPermissionModalError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
+  // Text-to-speech states
+  const [readingMessageId, setReadingMessageId] = useState<string | null>(null);
+  const [openMenuMessageId, setOpenMenuMessageId] = useState<string | null>(null);
+  const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
+
   // Attachment states
   const [fileAttachment, setFileAttachment] = useState<{name: string, type: string, base64: string} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,8 +107,52 @@ export default function ChatInterface({
     scrollToBottom();
   }, [activeSession?.messages, loading]);
 
+  // Cleanup speech synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if (readingMessageId) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [readingMessageId]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Text-to-Speech Functions
+  const stopReading = () => {
+    window.speechSynthesis.cancel();
+    setReadingMessageId(null);
+  };
+
+  const startReadAloud = (messageId: string, text: string) => {
+    // Stop any currently playing speech
+    if (readingMessageId) {
+      stopReading();
+    }
+
+    // Create and speak
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onstart = () => {
+      setReadingMessageId(messageId);
+    };
+
+    utterance.onend = () => {
+      setReadingMessageId(null);
+    };
+
+    utterance.onerror = () => {
+      setReadingMessageId(null);
+    };
+
+    synthRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+    setOpenMenuMessageId(null);
   };
 
   const checkLimits = async () => {
@@ -863,25 +915,79 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                     : 'bg-[#0a0a0a] border-white/5 text-zinc-200'
                 }`}>
                   
-                  {/* Action overlays internally in bubbles */}
-                  <div className="absolute right-3.5 top-3.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-black border border-[#1a1a1a] p-1.5 rounded-lg">
-                    <button 
-                      onClick={() => copyMessageText(msg.id, msg.content)}
-                      className="p-1 text-zinc-400 hover:text-white rounded transition-colors cursor-pointer"
-                      title="Copy message contents"
-                    >
-                      {copyingMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                    {idx > 0 && (
+                  {/* Message Actions Menu */}
+                  <div className="absolute right-3.5 top-3.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 items-center">
+                    {/* Read Aloud Menu */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setOpenMenuMessageId(openMenuMessageId === msg.id ? null : msg.id)}
+                        className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg transition-all cursor-pointer"
+                        title="Message options"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Dropdown Menu */}
+                      {openMenuMessageId === msg.id && msg.role !== 'user' && (
+                        <div className="absolute right-0 top-full mt-2 bg-zinc-900 border border-white/10 rounded-lg shadow-lg z-50 min-w-[160px] overflow-hidden">
+                          <button
+                            onClick={() => startReadAloud(msg.id, msg.content)}
+                            className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2 transition-all ${
+                              readingMessageId === msg.id
+                                ? 'bg-indigo-600/20 text-indigo-300'
+                                : 'text-zinc-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <Volume2 className="w-3 h-3" />
+                            Read Aloud
+                          </button>
+
+                          {readingMessageId === msg.id && (
+                            <button
+                              onClick={() => stopReading()}
+                              className="w-full text-left px-4 py-2 text-xs flex items-center gap-2 text-red-400 hover:bg-red-500/10 transition-all"
+                            >
+                              <Square className="w-3 h-3" />
+                              Stop Reading
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => copyMessageText(msg.id, msg.content)}
+                            className="w-full text-left px-4 py-2 text-xs flex items-center gap-2 text-zinc-300 hover:bg-white/5 transition-all border-t border-white/5"
+                          >
+                            {copyingMessageId === msg.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                Copy
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Delete button for assistant messages */}
+                    {idx > 0 && msg.role !== 'user' && (
                       <button 
                         onClick={() => deleteIndividualMessage(msg.id)}
-                        className="p-1 text-zinc-400 hover:text-red-400 rounded transition-colors cursor-pointer"
-                        title="Delete individual log"
+                        className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                        title="Delete message"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
+
+                  {/* Highlight active reading state */}
+                  {readingMessageId === msg.id && (
+                    <div className="absolute inset-0 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 pointer-events-none animate-pulse" />
+                  )}
 
                   {/* Multi-step Agent Thought blocks */}
                   {msg.thoughts && msg.thoughts.length > 0 && (

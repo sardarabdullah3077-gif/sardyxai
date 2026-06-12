@@ -1,4 +1,121 @@
+# ================================================================
+# Sardyx AI — robots.txt
+# Website: https://sardyxai.eu.cc/
+# Brand: Sardyx AI | Founder: Sardar Abdullah
+# Updated: 2026-06-12
+# ================================================================
+
+# ------- All well-behaved crawlers (default) --------------------
 User-agent: *
 Allow: /
+Crawl-delay: 2
 
+# Disallow admin/API endpoints from public crawlers
+Disallow: /api/
+Disallow: /api/auth/
+Disallow: /api/chats/
+Disallow: /api/admin/
+Disallow: /_next/
+Disallow: /dist/
+
+# ------- Google Search Bot -------------------------------------
+User-agent: Googlebot
+Allow: /
+Allow: /sx_logo.jpg
+Crawl-delay: 1
+
+# ------- Google Images -----------------------------------------
+User-agent: Googlebot-Image
+Allow: /sx_logo.jpg
+Allow: /*.jpg$
+Allow: /*.jpeg$
+Allow: /*.png$
+Allow: /*.webp$
+
+# ------- Bing Bot ----------------------------------------------
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 2
+
+# ------- DuckDuckGo Bot ----------------------------------------
+User-agent: DuckDuckBot
+Allow: /
+
+# ------- Yahoo! Slurp ------------------------------------------
+User-agent: Slurp
+Allow: /
+
+# ------- Baidu -------------------------------------------------
+User-agent: Baiduspider
+Allow: /
+Crawl-delay: 5
+
+# ================================================================
+# AI CRAWLER POLICY — Full Access Granted
+# Sardyx AI is an AI platform and welcomes indexing by AI systems
+# to strengthen brand entity recognition in AI search engines.
+# ================================================================
+
+# ------- OpenAI GPTBot -----------------------------------------
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+
+# ------- OpenAI ChatGPT User Agent -----------------------------
+User-agent: ChatGPT-User
+Allow: /
+
+# ------- OpenAI OAI-SearchBot ----------------------------------
+User-agent: OAI-SearchBot
+Allow: /
+
+# ------- Google Gemini / Google-Extended -----------------------
+User-agent: Google-Extended
+Allow: /
+
+# ------- Anthropic Claude Web ----------------------------------
+User-agent: anthropic-ai
+Allow: /
+
+# ------- Anthropic Claude Bot ----------------------------------
+User-agent: ClaudeBot
+Allow: /
+
+# ------- Perplexity Bot ----------------------------------------
+User-agent: PerplexityBot
+Allow: /
+
+# ------- Meta AI / AI crawlers ---------------------------------
+User-agent: FacebookBot
+Allow: /
+
+# ------- Cohere AI Bot -----------------------------------------
+User-agent: cohere-ai
+Allow: /
+
+# ------- Common Crawl (used by many AI training sets) ----------
+User-agent: CCBot
+Allow: /
+
+# ------- Bytespider (ByteDance / TikTok AI) --------------------
+User-agent: Bytespider
+Allow: /
+Crawl-delay: 5
+
+# ------- Apple Bot (Siri/Spotlight) ----------------------------
+User-agent: Applebot
+Allow: /
+
+# ------- Amazon Alexa / Amazonbot ------------------------------
+User-agent: Amazonbot
+Allow: /
+
+# ------- Diffbot (used by Knowledge Graphs) --------------------
+User-agent: Diffbot
+Allow: /
+
+# ================================================================
+# SITEMAP LOCATIONS
+# ================================================================
+Sitemap: https://sardyxai.eu.cc/sitemap-index.xml
 Sitemap: https://sardyxai.eu.cc/sitemap.xml

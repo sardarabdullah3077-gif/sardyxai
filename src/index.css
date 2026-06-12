@@ -161,89 +161,89 @@ html {
 
 /* Premium Markdown Styling for AI Responses */
 @layer components {
-  /* Headings: Professional, premium styling */
+  /* Headings: Clean, professional */
   .prose-premium h1 {
-    @apply text-2xl font-semibold text-white mt-6 mb-4 leading-tight;
+    @apply text-xl font-semibold text-white mt-5 mb-3 leading-tight;
   }
 
   .prose-premium h2 {
-    @apply text-lg font-semibold text-white mt-5 mb-3 leading-tight border-b border-white/10 pb-2;
+    @apply text-base font-semibold text-white mt-4 mb-2.5 leading-tight;
   }
 
   .prose-premium h3 {
-    @apply text-base font-medium text-white/95 mt-4 mb-2.5;
+    @apply text-sm font-medium text-white/90 mt-3 mb-2;
   }
 
-  /* Paragraphs: Proper spacing and readability */
+  /* Paragraphs: Tight, readable */
   .prose-premium p {
-    @apply text-zinc-200 leading-relaxed mb-4 font-light;
+    @apply text-zinc-200 leading-relaxed mb-3 text-[13px];
   }
 
-  /* Lists: Better spacing and alignment */
+  /* Lists: Compact spacing */
   .prose-premium ul {
-    @apply list-disc pl-6 space-y-2.5 my-4;
+    @apply list-disc pl-5 space-y-1.5 my-3;
   }
 
   .prose-premium ul li {
-    @apply text-zinc-200 font-light;
+    @apply text-zinc-200 text-[13px];
   }
 
   .prose-premium ol {
-    @apply list-decimal pl-5 space-y-2.5 my-4;
+    @apply list-decimal pl-5 space-y-1.5 my-3;
   }
 
   .prose-premium ol li {
-    @apply text-zinc-200 font-light;
+    @apply text-zinc-200 text-[13px];
   }
 
-  /* Horizontal rule: Clean separator */
+  /* Horizontal rule */
   .prose-premium hr {
-    @apply my-6 border-white/10;
+    @apply my-4 border-white/10;
   }
 
-  /* Bold: Highlight important information */
+  /* Bold */
   .prose-premium strong {
     @apply font-semibold text-white;
   }
 
-  /* Italics: Emphasis without overwhelming */
+  /* Italics */
   .prose-premium em {
     @apply text-zinc-100 italic;
   }
 
-  /* Inline code: Technical terms */
+  /* Inline code */
   .prose-premium code:not(pre code) {
-    @apply bg-zinc-800 text-indigo-300 px-2 py-1 rounded text-[13px] font-mono;
+    @apply bg-zinc-800/80 text-indigo-300 px-1.5 py-0.5 rounded text-[12px] font-mono border border-white/5;
   }
 
-  /* Blockquotes: Important context */
+  /* Blockquotes */
   .prose-premium blockquote {
-    @apply border-l-4 border-indigo-500 pl-4 py-2 my-4 text-zinc-300 italic bg-indigo-950/20 rounded-r-lg;
+    @apply border-l-2 border-indigo-500/50 pl-3 py-1.5 my-3 text-zinc-300 text-[13px] bg-indigo-950/10 rounded-r-lg;
   }
 
-  /* Links: Interactive and visible */
+  /* Links */
   .prose-premium a {
-    @apply text-indigo-400 hover:text-indigo-300 underline decoration-indigo-400/50 hover:decoration-indigo-400 transition-colors;
+    @apply text-indigo-400 hover:text-indigo-300 underline decoration-indigo-400/30 hover:decoration-indigo-400 transition-colors;
   }
 
-  /* Tables: Professional styling */
+  /* Tables */
   .prose-premium table {
-    @apply w-full border-collapse my-4;
+    @apply w-full border-collapse my-3 text-[13px];
   }
 
   .prose-premium th {
-    @apply bg-zinc-800/50 text-white font-semibold px-4 py-2.5 text-left border-b border-white/10;
+    @apply bg-zinc-800/50 text-white font-semibold px-3 py-2 text-left border-b border-white/10;
   }
 
   .prose-premium td {
-    @apply px-4 py-2.5 border-b border-white/5 text-zinc-200;
+    @apply px-3 py-2 border-b border-white/5 text-zinc-200;
   }
 
   .prose-premium tr:hover {
     @apply bg-zinc-800/20;
   }
 
-  /* Text selection styling for better visibility */
+  /* Text selection */
   .select-text {
     user-select: text;
     -webkit-user-select: text;
@@ -264,24 +264,104 @@ html {
   /* Mobile optimizations */
   @media (max-width: 640px) {
     .prose-premium h1 {
-      @apply text-xl mt-5 mb-3;
+      @apply text-lg mt-4 mb-2;
     }
 
     .prose-premium h2 {
-      @apply text-base mt-4 mb-2.5;
+      @apply text-base mt-3 mb-2;
     }
 
     .prose-premium h3 {
-      @apply text-sm mt-3 mb-2;
-    }
-
-    .prose-premium ul li,
-    .prose-premium ol li {
-      @apply gap-2.5;
+      @apply text-sm mt-3 mb-1.5;
     }
 
     .prose-premium p {
-      @apply text-sm mb-3;
+      @apply text-[13px] mb-2.5;
     }
+
+    .prose-premium ul,
+    .prose-premium ol {
+      @apply space-y-1 my-2.5;
+    }
+  }
+}
+
+/* ================================================================
+   FOCUS-VISIBLE — Keyboard Navigation Accessibility
+   ================================================================ */
+:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ================================================================
+   WILL-CHANGE — Performance hints for animated elements
+   ================================================================ */
+.animate-pulse,
+.animate-spin {
+  will-change: transform, opacity;
+}
+
+/* ================================================================
+   PRINT STYLESHEET — Clean print output
+   ================================================================ */
+@media print {
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  body {
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  a,
+  a:visited {
+    text-decoration: underline;
+  }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    font-weight: normal;
+    color: #555;
+  }
+
+  a[href^="#"]::after,
+  a[href^="javascript:"]::after {
+    content: "";
+  }
+
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+  }
+
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  @page {
+    margin: 2cm;
+  }
+
+  .fixed,
+  [role="dialog"] {
+    display: none !important;
   }
 }

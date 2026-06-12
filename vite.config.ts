@@ -12,12 +12,13 @@ export default defineConfig(() => {
       },
     },
     build: {
-      // Raise warning limit slightly; we've split properly below
-      chunkSizeWarningLimit: 600,
+      chunkSizeWarningLimit: 500,
+      target: 'es2022',
+      minify: 'esbuild',
       rollupOptions: {
         output: {
           manualChunks: (id) => {
-            // Core React runtime — tiny, cached aggressively
+            // Core React runtime
             if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
               return 'vendor-react';
             }
@@ -25,7 +26,7 @@ export default defineConfig(() => {
             if (id.includes('node_modules/motion') || id.includes('node_modules/framer-motion')) {
               return 'vendor-motion';
             }
-            // Icon library (large)
+            // Icon library (tree-shakeable but large)
             if (id.includes('node_modules/lucide-react')) {
               return 'vendor-lucide';
             }
@@ -43,7 +44,7 @@ export default defineConfig(() => {
             ) {
               return 'vendor-markdown';
             }
-            // Syntax highlighting (react-syntax-highlighter bundles Prism internally)
+            // Syntax highlighting — separate chunk, lazy-loaded
             if (
               id.includes('node_modules/highlight.js') ||
               id.includes('node_modules/prism') ||
@@ -62,10 +63,7 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify - file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

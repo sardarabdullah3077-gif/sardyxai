@@ -11,11 +11,11 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLoginSuccess: (
-    email: string, 
-    name: string, 
-    avatarUrl?: string, 
-    id?: string, 
-    access_token?: string, 
+    email: string,
+    name: string,
+    avatarUrl?: string,
+    id?: string,
+    access_token?: string,
     refresh_token?: string
   ) => void;
   isGuestBlocked?: boolean;
@@ -26,8 +26,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'verify'>('signin');
-  
-  // Form values
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -45,6 +44,23 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
   }, [cooldown]);
 
   if (!isOpen) return null;
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch('/api/auth/google');
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Failed to initialize Google sign-in.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google sign-in is not available. Please use email sign-in.');
+      setLoading(false);
+    }
+  };
 
   const handleEmailAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,14 +91,14 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
         } catch {
           throw new Error(`Server error: ${response.status} ${response.statusText}`);
         }
-        
+
         if (!response.ok) {
           throw new Error(data.error || 'Failed to create account.');
         }
 
         if (data.verificationRequired) {
           setAuthMode('verify');
-          setSuccess('Account created! A 6-digit verification code has been sent to your email.');
+          setSuccess('Account created! A 6-digit verification code has been sent to your email. Check your inbox and spam folder.');
           setCooldown(60);
           return;
         }
@@ -92,7 +108,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
           data.user.name,
           data.user.avatarUrl,
           data.user.id,
-          '', 
+          '',
           ''
         );
         onClose();
@@ -113,14 +129,13 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
         if (!response.ok) {
           if (data.error === 'EMAIL_NOT_VERIFIED') {
             setAuthMode('verify');
-            setError('Please verify your email address before signing in.');
+            setError('Please verify your email address before signing in. A new code has been sent.');
             setCooldown(60);
-            
-            // Trigger background OTP send for unverified user attempting log in
+
             fetch('/api/auth/resend-otp', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: data.email }),
+              body: JSON.stringify({ email }),
             }).catch(() => {});
             return;
           }
@@ -132,7 +147,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
           data.user.name,
           data.user.avatarUrl,
           data.user.id,
-          data.token || '', 
+          data.token || '',
           ''
         );
         onClose();
@@ -167,7 +182,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
         throw new Error(data.error || 'Failed to verify code.');
       }
 
-      setSuccess('Email successfully verified!');
+      setSuccess('Email verified successfully!');
       setTimeout(() => {
         onLoginSuccess(
           data.user.email,
@@ -178,7 +193,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
           ''
         );
         onClose();
-      }, 1000);
+      }, 800);
     } catch (err: any) {
       setError(err.message || 'OTP verification failed.');
     } finally {
@@ -204,7 +219,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
         throw new Error(data.error || 'Failed to resend code.');
       }
 
-      setSuccess('Verification code resent successfully!');
+      setSuccess('Verification code resent! Check your inbox and spam folder.');
       setCooldown(60);
     } catch (err: any) {
       setError(err.message || 'Failed to resend verification code.');
@@ -215,31 +230,31 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
 
   return (
     <div id="auth-modal-root" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050505]/95 backdrop-blur-md overflow-y-auto animate-fade-in scrollbar-light">
-      <div 
-        onClick={(e) => e.stopPropagation()} 
+      <div
+        onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-sm p-8 my-8 rounded-3xl bg-[#0a0a0a] border border-white/10 shadow-2xl text-center overflow-visible"
       >
-        {/* Decorative ambient glowing gradient */}
+        {/* Decorative ambient glow */}
         <div className="absolute top-[-20%] left-[-20%] w-[180px] h-[180px] bg-indigo-600/15 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-[-10%] right-[-1%] w-[180px] h-[180px] bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-        {/* Brand visual header */}
+        {/* Brand header */}
         <div className="relative z-10 mb-6 mt-2">
-          <img 
-            src={sardyxLogo} 
-            alt="SARDYX AI Premium Logo" 
-            className="w-14 h-14 rounded-2xl object-cover shadow-xl shadow-indigo-550/15 mx-auto mb-4 animate-pulse"
+          <img
+            src={sardyxLogo}
+            alt="Sardyx AI"
+            className="w-14 h-14 rounded-2xl object-cover shadow-xl mx-auto mb-4"
             referrerPolicy="no-referrer"
           />
           <h2 className="text-2xl font-bold tracking-tight text-white mb-2">
-            {authMode === 'signin' ? 'Sign In' : authMode === 'signup' ? 'Sign Up' : 'Verify Email'} / SARDYX Core
+            {authMode === 'signin' ? 'Sign In' : authMode === 'signup' ? 'Create Account' : 'Verify Email'}
           </h2>
           <p className="text-zinc-400 text-xs sm:text-sm max-w-xs mx-auto">
-            {authMode === 'verify' 
-              ? 'Enter the 6-digit confirmation code sent to verify your identity.' 
-              : isGuestBlocked 
-                ? 'Your free guest limit has been consumed. Register/Login with your Email and Password below.'
-                : 'Provision secure digital memory contexts and retrieve encrypted chat historical records.'}
+            {authMode === 'verify'
+              ? 'Enter the 6-digit code sent to your email.'
+              : isGuestBlocked
+                ? 'Your free limit has been reached. Sign in to continue.'
+                : 'Access your AI workspace with a free account.'}
           </p>
         </div>
 
@@ -247,8 +262,8 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
           <div className="mb-6 p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/25 text-left text-xs text-indigo-200 flex gap-3 items-start">
             <AlertCircle className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
             <div>
-              <span className="font-semibold block mb-0.5 text-zinc-100">Sandbox Guest Limit Met</span>
-              Unlock continuous message streams, custom semantic memories, and high-fidelity text-to-speech cognitive engines.
+              <span className="font-semibold block mb-0.5 text-zinc-100">Free Limit Reached</span>
+              Sign in to unlock unlimited messages and saved conversations.
             </div>
           </div>
         )}
@@ -268,40 +283,35 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
         )}
 
         {authMode === 'verify' ? (
-          /* Email Verification Code Form */
           <form onSubmit={handleVerifyOtpSubmit} className="space-y-4 mb-6 relative z-10 text-left">
             <div>
               <div className="text-xs text-zinc-400 mb-4 bg-zinc-900/40 p-3 rounded-xl border border-white/5">
-                We've sent a 6-digit verification code to <strong className="text-zinc-200">{email}</strong>.
+                Code sent to <strong className="text-zinc-200">{email}</strong>. Check spam if not in inbox.
               </div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5 font-mono uppercase tracking-wider">Verification OTP Code</label>
-              <div className="relative font-mono">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500 font-sans">
-                  <Sparkles className="w-4 h-4" />
-                </span>
-                <input
-                  type="text"
-                  maxLength={6}
-                  placeholder="••••••"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  disabled={loading}
-                  required
-                  className="w-full bg-[#121212] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-lg text-white placeholder-zinc-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-colors tracking-[0.5em] text-center font-bold font-mono uppercase"
-                />
-              </div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5 font-mono uppercase tracking-wider">Verification Code</label>
+              <input
+                type="text"
+                maxLength={6}
+                placeholder="000000"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                disabled={loading}
+                required
+                className="w-full bg-[#121212] border border-white/10 rounded-xl py-3 px-4 text-lg text-white placeholder-zinc-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-colors tracking-[0.5em] text-center font-bold font-mono"
+                autoFocus
+              />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 px-5 bg-indigo-600 hover:bg-indigo-550 disabled:bg-indigo-950 text-white font-semibold rounded-xl text-sm transition-all shadow-lg hover:shadow-indigo-500/10 flex items-center justify-center gap-2 cursor-pointer select-none"
+              className="w-full mt-2 py-3 px-5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-950 text-white font-semibold rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  <span>Verify Verification Code</span>
+                  <span>Verify</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -311,98 +321,119 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
               type="button"
               disabled={loading || cooldown > 0}
               onClick={handleResendOtp}
-              className="w-full py-2.5 px-5 bg-[#121212] hover:bg-[#181818] border border-white/5 disabled:bg-zinc-950 disabled:opacity-50 text-zinc-300 hover:text-white font-semibold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
+              className="w-full py-2.5 px-5 bg-[#121212] hover:bg-[#181818] border border-white/5 disabled:bg-zinc-950 disabled:opacity-50 text-zinc-300 hover:text-white font-semibold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              {cooldown > 0 ? (
-                <span>Resend Code ({cooldown}s)</span>
-              ) : (
-                <span>Resend Code</span>
-              )}
+              {cooldown > 0 ? `Resend Code (${cooldown}s)` : 'Resend Code'}
             </button>
           </form>
         ) : (
-          /* Standard Manual Credentials Form */
-          <form onSubmit={handleEmailAuthSubmit} className="space-y-4 mb-6 relative z-10 text-left">
-            {authMode === 'signup' && (
+          <>
+            {/* Google Sign In */}
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              className="w-full mb-4 py-3 px-5 bg-white hover:bg-zinc-100 text-black font-semibold rounded-xl text-sm transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 relative z-10"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Continue with Google
+            </button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 mb-4 relative z-10">
+              <div className="flex-1 h-px bg-white/10"></div>
+              <span className="text-[10px] text-zinc-500 font-mono uppercase">or</span>
+              <div className="flex-1 h-px bg-white/10"></div>
+            </div>
+
+            {/* Email form */}
+            <form onSubmit={handleEmailAuthSubmit} className="space-y-4 mb-6 relative z-10 text-left">
+              {authMode === 'signup' && (
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Full Name</label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
+                      <User className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Your name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      disabled={loading}
+                      required
+                      className="w-full bg-[#121212] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5 font-mono uppercase tracking-wider">Full Name</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Email</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
-                    <User className="w-4 h-4" />
+                    <Mail className="w-4 h-4" />
                   </span>
                   <input
-                    type="text"
-                    placeholder="Amelia Vance"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
                     required
-                    className="w-full bg-[#121212] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-650 focus:outline-none focus:border-indigo-500/85 focus:ring-1 focus:ring-indigo-500/35 transition-colors"
+                    className="w-full bg-[#121212] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
                   />
                 </div>
               </div>
-            )}
 
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5 font-mono uppercase tracking-wider">Email Address</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
-                  <Mail className="w-4 h-4" />
-                </span>
-                <input
-                  type="email"
-                  placeholder="you@domain.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                  required
-                  className="w-full bg-[#121212] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-650 focus:outline-none focus:border-indigo-500/85 focus:ring-1 focus:ring-indigo-500/35 transition-colors"
-                />
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Password</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
+                    <Lock className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="password"
+                    placeholder="Min. 6 characters"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
+                    required
+                    className="w-full bg-[#121212] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5 font-mono uppercase tracking-wider">Password</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
-                  <Lock className="w-4 h-4" />
-                </span>
-                <input
-                  type="password"
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={loading}
-                  required
-                  className="w-full bg-[#121212] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-650 focus:outline-none focus:border-indigo-500/85 focus:ring-1 focus:ring-indigo-500/35 transition-colors"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 py-3 px-5 bg-indigo-600 hover:bg-indigo-550 disabled:bg-indigo-950 text-white font-semibold rounded-xl text-sm transition-all shadow-lg hover:shadow-indigo-500/10 flex items-center justify-center gap-2 cursor-pointer select-none"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <span>{authMode === 'signin' ? 'Sign In to Core' : 'Create Encrypted Profile'}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 py-3 px-5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-950 text-white font-semibold rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>{authMode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          </>
         )}
 
-        {/* Switch Auth Mode toggle link */}
+        {/* Auth mode toggle */}
         <div className="relative z-10 text-xs text-zinc-400 font-medium mb-6">
           {authMode === 'verify' ? (
             <span>
-              Need to change email or restart?{' '}
-              <button 
-                type="button" 
+              Need to change email?{' '}
+              <button
+                type="button"
                 onClick={() => { setAuthMode('signup'); setError(''); setSuccess(''); }}
                 className="text-indigo-400 hover:text-indigo-300 font-semibold underline cursor-pointer"
               >
@@ -412,8 +443,8 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
           ) : authMode === 'signin' ? (
             <span>
               Don't have an account?{' '}
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => { setAuthMode('signup'); setError(''); setSuccess(''); }}
                 className="text-indigo-400 hover:text-indigo-300 font-semibold underline cursor-pointer"
               >
@@ -423,8 +454,8 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
           ) : (
             <span>
               Already have an account?{' '}
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => { setAuthMode('signin'); setError(''); setSuccess(''); }}
                 className="text-indigo-400 hover:text-indigo-300 font-semibold underline cursor-pointer"
               >
@@ -435,13 +466,13 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, isGuestBloc
         </div>
 
         {!isGuestBlocked && (
-          <button 
+          <button
             type="button"
             disabled={loading}
             onClick={onClose}
-            className="text-zinc-650 hover:text-zinc-400 text-xs mt-6 block w-full text-center transition-colors cursor-pointer disabled:opacity-50 select-none"
+            className="text-zinc-600 hover:text-zinc-400 text-xs block w-full text-center transition-colors cursor-pointer disabled:opacity-50"
           >
-            Cancel and Return
+            Cancel
           </button>
         )}
       </div>

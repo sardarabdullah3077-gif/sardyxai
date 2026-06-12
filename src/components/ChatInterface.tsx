@@ -320,24 +320,25 @@ export default function ChatInterface({
   const initFreshSession = () => {
     const newSess: ChatSession = {
       id: `sess-temp-${Date.now()}`,
-      title: 'Dynamic Sandbox Topic',
+      title: 'New Conversation',
       messages: [
         {
           id: 'welcome-0',
           role: 'assistant',
-          content: `### Welcome to SARDYX AI Platform
+          content: `Welcome to **Sardyx AI** — your unified multi-model AI workspace.
 
-Unified cognitive assistant router. Built cleanly with a dark glassmorphism layout.
+I can help you with:
 
-#### Dynamic Handshake Routing Capabilities:
-*   🔑 **Unified AI Routing Key**: Type prompts naturally. The backend detects task intent (coding, reasoning, vision OCR, search grounding, art/video vectors) instantly.
-*   ⚡ **Self-Hosted Integrations**: Powered through custom APIs with robust local sandbox guarantees.
-*   🛡️ **Memory Sync**: Sign in via Google to persistence notes and saved chats across devices.
+- **Chat & Reasoning** — Ask anything, get clear answers
+- **Code** — Write, debug, and explain code in any language
+- **Web Search** — Real-time information with sources
+- **Documents** — Analyze PDFs, CSVs, and text files
+- **Images** — Generate visuals and artwork
 
-*Created under directives from **Sardar Abdullah Fazal***`,
+Just type your message to get started.`,
           timestamp: new Date().toISOString(),
-          modelUsed: 'SardyX Conversational-X',
-          thoughts: ['Core identity vectors initialized.', 'Displaying attribution details for Sardar Abdullah Fazal.']
+          modelUsed: 'Sardyx Auto-Router',
+          thoughts: ['Session initialized', 'Displaying welcome']
         }
       ],
       modelMode: 'auto',
@@ -816,10 +817,10 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             {/* Header Identity */}
             <div className="flex items-center justify-between border-b border-white/5 pb-4">
               <div className="flex items-center gap-2.5">
-                <img 
-                  src={sardyxLogo} 
-                  alt="SARDYX AI Premium" 
-                  className="w-10 h-10 rounded-xl object-contain shrink-0 shadow-lg shadow-indigo-500/20 border border-white/10 p-0.5 bg-black animate-[pulse_4s_infinite]"
+                <img
+                  src={sardyxLogo}
+                  alt="Sardyx AI"
+                  className="w-9 h-9 rounded-xl object-contain shrink-0 shadow-lg border border-white/10 p-0.5 bg-black"
                   referrerPolicy="no-referrer"
                 />
                 <span className="text-sm font-bold tracking-tight text-white">SARDYX <span className="text-indigo-400">AI</span></span>
@@ -930,10 +931,10 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
             )}
 
             {/* System Status Indicators */}
-            <div className="flex justify-between items-center text-[9px] font-mono text-zinc-650 pt-1.5 border-t border-white/[0.02] pl-1">
-              <span>SARDYX COGNITIVE V1.1</span>
+            <div className="flex justify-between items-center text-[9px] font-mono text-zinc-600 pt-1.5 border-t border-white/[0.02] pl-1">
+              <span>SARDYX v1.1</span>
               <span className="flex items-center gap-1 text-emerald-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 ONLINE
               </span>
             </div>
@@ -943,9 +944,9 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
       {/* CORE WORKSPACE SECTION */}
       <main className="flex-1 flex flex-col justify-between overflow-hidden relative z-20 bg-[#050505]">
-        
-        {/* INTERFACE TOP HEADER BAR */}
-        <header id="chat-header-bar" className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#050505]/60 backdrop-blur-md relative z-10 shrink-0">
+
+        {/* INTERFACE TOP HEADER BAR — Sticky on all devices */}
+        <header id="chat-header-bar" className="sticky top-0 z-30 h-14 border-b border-white/5 flex items-center justify-between px-4 sm:px-6 bg-[#050505]/80 backdrop-blur-xl shrink-0">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
@@ -1020,20 +1021,22 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
             {/* Waiting loader feedback details */}
             {loading && (
-              <div className="flex gap-4 items-start animate-pulse">
-                <img 
-                  src={sardyxLogo} 
-                  alt="SARDYX AI" 
-                  className="w-9 h-9 rounded-xl object-contain shrink-0 border border-white/5 p-0.5 bg-black animate-[spin_10s_linear_infinite]"
+              <div className="flex gap-3 items-start animate-fade-in">
+                <img
+                  src={sardyxLogo}
+                  alt="Sardyx AI"
+                  className="w-7 h-7 rounded-lg object-contain shrink-0 border border-white/5 p-0.5 bg-black mt-0.5"
                   referrerPolicy="no-referrer"
                 />
-                <div className="p-5 rounded-2xl border bg-[#0a0a0a] border-white/5 text-zinc-300 max-w-[85%] space-y-2 w-full">
-                  <div className="flex items-center gap-2 font-mono text-[10px] text-indigo-400">
-                    <Workflow className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                    <span>Analyzing intents. Orchestrating neural parameters...</span>
+                <div className="px-4 py-3 rounded-2xl rounded-bl-md border bg-[#0d0d0d] border-white/5 text-zinc-300">
+                  <div className="flex items-center gap-2">
+                    <span className="flex gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    </span>
+                    <span className="text-[11px] font-mono text-zinc-500">Thinking...</span>
                   </div>
-                  <div className="h-4 bg-zinc-900 rounded-md w-[80%] my-3"></div>
-                  <div className="h-4 bg-zinc-900 rounded-md w-[50%]"></div>
                 </div>
               </div>
             )}

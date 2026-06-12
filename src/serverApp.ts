@@ -143,8 +143,8 @@ app.post(["/api/auth/local-signup", "/auth/local-signup"], async (req, res) => {
 
 app.post(["/api/auth/local-login", "/auth/local-login"], async (req, res) => {
   console.log("[AUTH] POST /api/auth/local-login");
+  const { email, password } = req.body;
   try {
-    const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
     const user = await dbSignIn(email, password);
     addAuditLog("auth", `Account authenticated: ${user.email}`, user.email, getClientIp(req));

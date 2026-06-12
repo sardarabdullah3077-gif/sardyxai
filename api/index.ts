@@ -451,8 +451,8 @@ app.post(["/api/auth/local-signup", "/auth/local-signup"], async (req, res) => {
 
 // Auth — login
 app.post(["/api/auth/local-login", "/auth/local-login"], async (req, res) => {
+  const { email, password } = req.body;
   try {
-    const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
     const user = await signIn(email.toLowerCase().trim(), password);
     return res.json({ user, token: user.email });
@@ -479,7 +479,7 @@ app.post(["/api/auth/verify-otp", "/auth/verify-otp"], async (req, res) => {
 });
 
 // Auth — resend otp
-app.post(["/api/auth/resend-otp", "/api/auth/resend-otp"], async (req, res) => {
+app.post(["/api/auth/resend-otp", "/auth/resend-otp"], async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required." });
@@ -508,6 +508,44 @@ app.get(["/api/auth/session", "/auth/session"], async (req, res) => {
 
 // Auth — logout
 app.post(["/api/auth/logout", "/auth/logout"], (_req, res) => res.json({ success: true }));
+
+// Auth — Google OAuth URL
+app.get(["/api/auth/google", "/auth/google"], async (req, res) => {
+  const client = sb();
+  if (!client) return res.status(500).json({ error: "Auth provider not configured" });
+  try {
+    const { data, error } = await client.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${req.headers.origin || 'https://sardyxai.eu.cc'}/`
+      }
+    });
+    if (error) throw new Error(error.message);
+    return res.json({ url: data.url });
+  } catch (err: any) {
+    console.error("[AUTH] Google OAuth error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Auth — Google OAuth callback (handles the redirect)
+app.get(["/api/auth/callback", "/auth/callback"], async (req, res) => {
+  const client = sb();
+  if (!client) return res.redirect('/');
+  try {
+    const code = req.query.code as string;
+    if (code) {
+      await client.auth.exchangeCodeForSession(code);
+    }
+    const hash = req.query.hash as string;
+    if (hash) {
+      // Process hash-based auth (some Supabase flows use this)
+    }
+  } catch (err: any) {
+    console.error("[AUTH] Callback error:", err.message);
+  }
+  return res.redirect('/');
+});
 
 // Profile sync
 app.post(["/api/auth/login", "/auth/login"], async (req, res) => {

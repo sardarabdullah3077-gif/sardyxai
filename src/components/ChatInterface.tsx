@@ -1036,24 +1036,6 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
                     <div className="absolute inset-0 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 pointer-events-none animate-pulse" />
                   )}
 
-                  {/* Multi-step Agent Thought blocks */}
-                  {msg.thoughts && msg.thoughts.length > 0 && (
-                    <details className="mb-4 bg-black border border-white/5 p-3.5 rounded-xl cursor-pointer">
-                      <summary className="text-[10px] font-mono text-indigo-400 tracking-wide uppercase font-semibold flex items-center gap-1">
-                        <Workflow className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-                        <span>Autonomous Routing Steps ({msg.thoughts.length})</span>
-                      </summary>
-                      <div className="mt-2.5 space-y-1.5 pl-4 border-l border-indigo-900/40 text-[11px] font-mono text-zinc-550 leading-normal">
-                        {msg.thoughts.map((th, thIdx) => (
-                          <div key={thIdx} className="flex gap-1">
-                            <span className="text-indigo-600 font-bold">&gt;</span>
-                            <p>{th}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-
                   {/* Attachment indicator block inside message */}
                   {msg.attachments && msg.attachments.length > 0 && (
                     <div className="mb-3 flex items-center gap-2.5 p-2 bg-black rounded-xl border border-white/5 max-w-sm">

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import sardyxLogo from '../assets/images/sx_logo.jpg';
 import {
   Bot, 
@@ -39,10 +39,9 @@ import {
   Lock,
   ArrowRight
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import CodeBlockRenderer from './CodeBlockRenderer';
 import { ChatSession, Message, DynamicModel, UserProfile, Artifact } from '../types';
+import MessageBubble from './MessageBubble';
+import ChatInput, { ChatInputRef } from './ChatInput';
 
 interface ChatInterfaceProps {
   user: UserProfile | null;
@@ -63,8 +62,8 @@ export default function ChatInterface({
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [models, setModels] = useState<DynamicModel[]>([]);
   const [selectedModelMode, setSelectedModelMode] = useState<string>('auto');
-  const [inputPrompt, setInputPrompt] = useState('');
   const [loading, setLoading] = useState(false);
+  const chatInputRef = useRef<ChatInputRef>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(typeof window !== "undefined" && window.innerWidth >= 768);
   const [guestCount, setGuestCount] = useState(0);
   const [isLimitBlocked, setIsLimitBlocked] = useState(false);
@@ -205,12 +204,12 @@ export default function ChatInterface({
   };
 
   // Text-to-Speech Functions
-  const stopReading = () => {
+  const stopReading = useCallback(() => {
     window.speechSynthesis.cancel();
     setReadingMessageId(null);
-  };
+  }, []);
 
-  const startReadAloud = (messageId: string, text: string) => {
+  const startReadAloud = useCallback((messageId: string, text: string) => {
     // Stop any currently playing speech
     if (readingMessageId) {
       stopReading();
@@ -261,7 +260,7 @@ export default function ChatInterface({
     synthRef.current = utterance;
     window.speechSynthesis.speak(utterance);
     setOpenMenuMessageId(null);
-  };
+  }, [activeSession?.messages, readingMessageId]);
 
   const checkLimits = async () => {
     try {
@@ -553,11 +552,11 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
         rec.onresult = (event: any) => {
           const transcript = event.results[0][0].transcript;
-          if (transcript) {
-            setInputPrompt((prev) => {
-              const trimmed = prev.trim();
-              return trimmed ? `${trimmed} ${transcript}` : transcript;
-            });
+          if (transcript && chatInputRef.current) {
+            const prev = chatInputRef.current.getValue();
+            const trimmed = prev.trim();
+            const newValue = trimmed ? `${trimmed} ${transcript}` : transcript;
+            chatInputRef.current.setValue(newValue);
           }
         };
 
@@ -572,9 +571,8 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputPrompt.trim() && !fileAttachment) return;
+  const handleSendMessage = async (promptText: string) => {
+    if (!promptText.trim() && !fileAttachment) return;
 
     if (!user && guestCount >= 1) {
       setIsLimitBlocked(true);
@@ -582,8 +580,6 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
       return;
     }
 
-    const promptText = inputPrompt;
-    setInputPrompt('');
     setLoading(true);
 
     const userMsgId = `msg-user-${Date.now()}`;
@@ -666,11 +662,11 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
           alert(`Server error (${response.status}): ${response.statusText}`);
         }
         // Revert prompt text so user doesn't lose it
-        setInputPrompt(promptText);
+        chatInputRef.current?.setValue(promptText);
       }
     } catch (err) {
       console.error(err);
-      setInputPrompt(promptText);
+      chatInputRef.current?.setValue(promptText);
     } finally {
       setLoading(false);
     }
@@ -756,7 +752,7 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
     }
   };
 
-  const deleteIndividualMessage = (msgId: string) => {
+  const deleteIndividualMessage = useCallback((msgId: string) => {
     if (!activeSession) return;
     const filteredMsgs = activeSession.messages.filter(m => m.id !== msgId);
     setActiveSession({
@@ -774,13 +770,17 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
         body: JSON.stringify({ messages: filteredMsgs })
       }).catch(err => console.error(err));
     }
-  };
+  }, [activeSession, user]);
 
-  const copyMessageText = (msgId: string, text: string) => {
+  const copyMessageText = useCallback((msgId: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopyingMessageId(msgId);
     setTimeout(() => setCopyingMessageId(null), 1500);
-  };
+  }, []);
+
+  const handleToggleMenu = useCallback((msgId: string | null) => {
+    setOpenMenuMessageId(msgId);
+  }, []);
 
   const exportConversationLog = () => {
     if (!activeSession) return;
@@ -1002,197 +1002,20 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
 
           <div className="max-w-3xl mx-auto w-full space-y-4 sm:space-y-6">
             {activeSession?.messages.map((msg, idx) => (
-              <div 
-                key={msg.id || idx} 
-                className={`flex gap-2 sm:gap-4 items-start animate-fade-in w-full ${
-                  msg.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {msg.role !== 'user' && (
-                  <img 
-                    src={sardyxLogo} 
-                    alt="SARDYX AI" 
-                    className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg object-contain shrink-0 shadow-md shadow-indigo-500/15 border border-white/5 p-0.5 bg-black animate-[pulse_3s_infinite] mt-1"
-                    referrerPolicy="no-referrer"
-                  />
-                )}
-
-                <div className={`p-3 sm:p-4 rounded-xl border flex flex-col justify-between gap-1.5 leading-relaxed text-xs sm:text-sm w-full sm:max-w-[85%] max-w-[100%] relative group select-text break-words ${
-                  msg.role === 'user' 
-                    ? 'bg-zinc-900/60 border-white/5 text-zinc-100' 
-                    : 'bg-[#0a0a0a] border-white/5 text-zinc-200'
-                }`}>
-                  
-                  {/* Message Actions Menu */}
-                  <div className="absolute right-3.5 top-3.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-1 items-center">
-                    {/* Read Aloud Menu */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setOpenMenuMessageId(openMenuMessageId === msg.id ? null : msg.id)}
-                        className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg transition-all cursor-pointer"
-                        title="Message options"
-                      >
-                        <MoreVertical className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Dropdown Menu */}
-                      {openMenuMessageId === msg.id && msg.role !== 'user' && (
-                        <div className="absolute right-0 top-full mt-2 bg-zinc-900 border border-white/10 rounded-lg shadow-lg z-50 min-w-[160px] overflow-hidden md:w-max" data-menu-container>
-                          <button
-                            onClick={() => startReadAloud(msg.id, msg.content)}
-                            className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2 transition-all ${
-                              readingMessageId === msg.id
-                                ? 'bg-indigo-600/20 text-indigo-300'
-                                : 'text-zinc-300 hover:bg-white/5'
-                            }`}
-                          >
-                            <Volume2 className="w-3 h-3" />
-                            Read Aloud
-                          </button>
-
-                          {readingMessageId === msg.id && (
-                            <button
-                              onClick={() => stopReading()}
-                              className="w-full text-left px-4 py-2 text-xs flex items-center gap-2 text-red-400 hover:bg-red-500/10 transition-all"
-                            >
-                              <Square className="w-3 h-3" />
-                              Stop Reading
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => copyMessageText(msg.id, msg.content)}
-                            className="w-full text-left px-4 py-2 text-xs flex items-center gap-2 text-zinc-300 hover:bg-white/5 transition-all border-t border-white/5"
-                          >
-                            {copyingMessageId === msg.id ? (
-                              <>
-                                <Check className="w-3 h-3 text-emerald-400" />
-                                Copied
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3 h-3" />
-                                Copy
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Delete button for assistant messages */}
-                    {idx > 0 && msg.role !== 'user' && (
-                      <button 
-                        onClick={() => deleteIndividualMessage(msg.id)}
-                        className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
-                        title="Delete message"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Highlight active reading state */}
-                  {readingMessageId === msg.id && (
-                    <div className="absolute inset-0 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 pointer-events-none animate-pulse" />
-                  )}
-
-                  {/* Attachment indicator block inside message */}
-                  {msg.attachments && msg.attachments.length > 0 && (
-                    <div className="mb-3 flex items-center gap-2.5 p-2 bg-black rounded-xl border border-white/5 max-w-sm">
-                      <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <div className="truncate text-xs font-mono max-w-[80%]">
-                        <span className="text-zinc-300 truncate block font-semibold">{msg.attachments[0].name}</span>
-                        <span className="text-[10px] text-zinc-500 uppercase">{msg.attachments[0].type.split("/")[1] || "DOCUMENT"}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* MAIN Markdowns output renderer with premium styling */}
-                  <div className="prose-premium text-zinc-200 select-text">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code(props) {
-                          const { children, className, node, ...rest } = props;
-                          const inline = !String(children).includes('\n') && !className?.includes('language-');
-                          return (
-                            <CodeBlockRenderer inline={inline} className={className} node={node}>
-                              {children}
-                            </CodeBlockRenderer>
-                          );
-                        }
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-
-                  {/* RENDER MEDIA ARTIFACTS IF COMPLETED FROM BACKEND */}
-                  {msg.artifacts && msg.artifacts.map((art, artIdx) => (
-                    <div key={artIdx} className="mt-4 p-1.5 bg-black border border-white/5 rounded-2xl max-w-md">
-                      {art.type === 'image' && (
-                        <div className="overflow-hidden rounded-xl border border-white/5">
-                          <img 
-                            src={art.url} 
-                            alt={art.title || "Calculated Render"} 
-                            className="w-full h-auto object-cover max-h-[300px]"
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
-                      )}
-                      {art.type === 'video' && (
-                        <div className="overflow-hidden rounded-xl border border-white/5 relative">
-                          <video 
-                            src={art.url} 
-                            controls 
-                            className="w-full h-auto max-h-[240px]"
-                            poster="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&h=300"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* SEARCH CITATIONS BLOCK */}
-                  {msg.citations && msg.citations.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-white/5">
-                      <span className="text-[10px] font-mono tracking-wide text-cyan-400 uppercase font-semibold flex items-center gap-1 mb-2">
-                        <Globe className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Referenced Web Citations</span>
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {msg.citations.map((cite, citeIdx) => (
-                          <a 
-                            key={citeIdx} 
-                            href={cite.url} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="p-2 border border-white/5 bg-black rounded-xl hover:border-cyan-900/30 transition-all text-xs flex flex-col justify-between"
-                          >
-                            <span className="font-semibold text-zinc-100 truncate pr-4">{cite.title}</span>
-                            <span className="text-[10px] text-zinc-500 truncate block mt-0.5">{cite.url}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Metadata display at footer of bubbles */}
-                  <div className="flex items-center gap-3.5 text-[9px] font-mono text-zinc-500 mt-3 pt-2.5 border-t border-white/5 select-none">
-                    <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    {msg.durationMs && (
-                      <span className="text-zinc-650 block sm:inline">Inference: {msg.durationMs}ms</span>
-                    )}
-                  </div>
-                </div>
-
-                {msg.role === 'user' && (
-                  <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs shrink-0 select-none text-white">
-                    {user ? user.name.substring(0, 1).toUpperCase() : 'U'}
-                  </div>
-                )}
-              </div>
+              <MessageBubble
+                key={msg.id || idx}
+                msg={msg}
+                idx={idx}
+                user={user}
+                isReading={readingMessageId === msg.id}
+                isMenuOpen={openMenuMessageId === msg.id}
+                isCopying={copyingMessageId === msg.id}
+                onToggleMenu={handleToggleMenu}
+                onStartReadAloud={startReadAloud}
+                onStopReading={stopReading}
+                onCopyText={copyMessageText}
+                onDeleteMessage={deleteIndividualMessage}
+              />
             ))}
 
             {/* Waiting loader feedback details */}
@@ -1218,169 +1041,24 @@ Unified cognitive assistant router. Built cleanly with a dark glassmorphism layo
           </div>
         </section>
 
-        {/* INPUT LAYOUT CONTROLLER */}
-        <section id="chat-input-layout" className="p-3 sm:p-6 border-t border-white/5 bg-[#050505] shrink-0">
-          <div className="max-w-3xl mx-auto space-y-3 relative">
-            
-            {/* Displaying attachment preview state if selected */}
-            {fileAttachment && (
-              <div className="absolute top-[-58px] left-0 right-0 p-2.5 bg-[#0a0a0a] border border-white/10 rounded-xl flex items-center justify-between shadow-xl max-w-sm animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-400" />
-                  <span className="text-xs text-zinc-300 truncate max-w-[200px]">{fileAttachment.name}</span>
-                </div>
-                <button 
-                  onClick={() => setFileAttachment(null)}
-                  className="p-1 hover:text-white text-zinc-400 hover:bg-zinc-800 rounded-lg cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Displaying speech recognition error or notice if set */}
-            {speechError && (
-              <div 
-                style={{ top: fileAttachment ? '-110px' : '-58px' }}
-                className="absolute left-0 right-0 p-2.5 bg-red-950/40 border border-red-900/30 rounded-xl flex items-center justify-between shadow-xl max-w-sm animate-fade-in z-20"
-              >
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-400" />
-                  <span className="text-xs text-red-200">{speechError}</span>
-                </div>
-                <button 
-                  onClick={() => setSpeechError(null)}
-                  className="p-1 hover:text-white text-zinc-455 hover:bg-zinc-850 rounded-lg cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Real-time speech status indicator */}
-            {isRecording && (
-              <div className="absolute top-[-44px] left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/30 backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-3 shadow-xl z-20 animate-fade-in">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-550"></span>
-                </span>
-                <span className="text-[10px] font-mono font-bold tracking-wider text-red-200">SARDYX ACTIVE SPEECH</span>
-                <div className="flex gap-0.5 items-end justify-center h-3 w-8">
-                  <div className="w-0.5 bg-red-400 rounded-full animate-bounce h-2" style={{ animationDelay: '0.1s', animationDuration: '0.7s' }}></div>
-                  <div className="w-0.5 bg-red-400 rounded-full animate-bounce h-3" style={{ animationDelay: '0.2s', animationDuration: '0.5s' }}></div>
-                  <div className="w-0.5 bg-red-450 rounded-full animate-bounce h-1.5" style={{ animationDelay: '0.3s', animationDuration: '0.8s' }}></div>
-                  <div className="w-0.5 bg-red-400 rounded-full animate-bounce h-3.5" style={{ animationDelay: '0s', animationDuration: '0.6s' }}></div>
-                  <div className="w-0.5 bg-red-400 rounded-full animate-bounce h-2" style={{ animationDelay: '0.4s', animationDuration: '0.7s' }}></div>
-                </div>
-              </div>
-            )}
-
-            {/* Injected model fallback warning if limits met */}
-            {isLimitBlocked ? (
-              <div className="p-6 bg-red-950/10 border border-red-500/20 rounded-2xl text-center space-y-4 max-w-md mx-auto animate-fade-in w-full">
-                <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-400">
-                  <Lock className="w-5 h-5 animate-pulse" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold text-white">Free Guest Limit Reached</h3>
-                  <p className="text-xs text-zinc-400">
-                    You have sent 5/5 free messages. Please Sign Up or Log In to continue using the SARDYX AI playground and access unlimited messages.
-                  </p>
-                </div>
-                <button
-                  onClick={onOpenAuth}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-550 text-white font-semibold rounded-xl text-xs transition-all shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 flex items-center justify-center gap-2 mx-auto cursor-pointer"
-                >
-                  <span>Sign Up / Log In</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleSendMessage} className="relative z-10 w-full flex flex-col gap-2.5 md:gap-0">
-                <input 
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.txt,.csv,.xlsx"
-                  className="hidden"
-                />
-                
-                {/* Top row: File upload, Text input, and Mic (all on one line) */}
-                <div className="flex items-center gap-2 sm:gap-2.5 w-full border border-white/5 bg-zinc-900/40 hover:border-white/10 p-2 sm:p-2.5 rounded-2xl focus-within:border-indigo-500 transition-all">
-                  <button
-                    type="button"
-                    onClick={handleFileUploadClick}
-                    className="p-2 sm:p-2.5 bg-black border border-white/5 hover:border-white/10 text-zinc-400 hover:text-white rounded-lg cursor-pointer transition-colors shrink-0 hover:bg-zinc-900"
-                    title="Upload diagram scan or raw text (doc, txt, csv, spreadsheet, pdf)"
-                  >
-                    <FileUp className="w-4 h-4" />
-                  </button>
-
-                  <input
-                    type="text"
-                    placeholder={isRecording ? "🎙️ Listening..." : "Message SARDYX AI..."}
-                    value={inputPrompt}
-                    onChange={(e) => setInputPrompt(e.target.value)}
-                    disabled={loading}
-                    className="flex-1 bg-transparent px-2.5 py-2.5 sm:py-3 text-sm text-zinc-100 placeholder-zinc-550 outline-none min-w-0"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={handleMicClick}
-                    className={`p-2 sm:p-2.5 border rounded-lg cursor-pointer transition-all shrink-0 hover:bg-zinc-900 ${
-                      isRecording 
-                        ? "bg-red-650 border-red-500 text-white animate-pulse" 
-                        : "bg-black border-white/5 hover:border-white/10 text-zinc-400 hover:text-white"
-                    }`}
-                    title={isRecording ? "Stop listening" : "Voice to text (Microphone)"}
-                    disabled={loading}
-                  >
-                    {isRecording ? (
-                      <MicOff className="w-4 h-4 text-white" />
-                    ) : (
-                      <Mic className="w-4 h-4" />
-                    )}
-                  </button>
-
-                  {/* Send button on same line as input on desktop */}
-                  <button
-                    type="submit"
-                    disabled={loading || (!inputPrompt.trim() && !fileAttachment)}
-                    className="hidden md:flex p-2 md:p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:text-zinc-650 text-white font-medium rounded-lg cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all items-center justify-center gap-2 shrink-0"
-                    title="Send message"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Send button (full width on mobile only) */}
-                <button
-                  type="submit"
-                  disabled={loading || (!inputPrompt.trim() && !fileAttachment)}
-                  className="md:hidden w-full px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-950 disabled:text-zinc-650 text-white font-medium rounded-xl cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 text-sm"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Send</span>
-                </button>
-              </form>
-            )}
-
-            {/* Regenerate Action */}
-            {activeSession && activeSession.messages.length > 2 && (
-              <div className="flex justify-center pt-2 pb-1">
-                <button 
-                  onClick={regenerateLastResponse}
-                  disabled={loading}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-1.5 cursor-pointer transition-all"
-                >
-                  <RotateCw className="w-3.5 h-3.5" />
-                  Regenerate response
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
+        <ChatInput
+          ref={chatInputRef}
+          loading={loading}
+          isRecording={isRecording}
+          speechError={speechError}
+          onClearSpeechError={() => setSpeechError(null)}
+          isLimitBlocked={isLimitBlocked}
+          onOpenAuth={onOpenAuth}
+          onSubmit={handleSendMessage}
+          fileAttachment={fileAttachment}
+          onClearAttachment={() => setFileAttachment(null)}
+          onMicClick={handleMicClick}
+          onFileUploadClick={handleFileUploadClick}
+          fileInputRef={fileInputRef}
+          onFileChange={handleFileChange}
+          onRegenerate={regenerateLastResponse}
+          showRegenerate={!!(activeSession && activeSession.messages.length > 2)}
+        />
       </main>
 
       {/* Custom Voice & Microphone Permission Explainer Modal */}

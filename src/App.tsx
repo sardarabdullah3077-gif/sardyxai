@@ -3,13 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import LandingPage from './components/LandingPage';
-import ChatInterface from './components/ChatInterface';
-import AuthModal from './components/AuthModal';
-import UserDashboard from './components/UserDashboard';
 import { UserProfile } from './types';
+
+// Lazy-load heavy page components for route-level code splitting
+const LandingPage    = lazy(() => import('./components/LandingPage'));
+const ChatInterface  = lazy(() => import('./components/ChatInterface'));
+const AuthModal      = lazy(() => import('./components/AuthModal'));
+const UserDashboard  = lazy(() => import('./components/UserDashboard'));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+        <span className="text-xs font-mono text-zinc-500 tracking-widest uppercase">Loading…</span>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<'landing' | 'workspace'>('landing');
@@ -140,63 +153,67 @@ export default function App() {
     <div className="min-h-screen bg-neutral-950 text-neutral-100 overflow-x-hidden relative select-none">
       
       {/* Route Animation Wrapper */}
-      <AnimatePresence mode="wait">
-        {currentScreen === 'landing' && (
-          <motion.div
-            key="landing"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.4 }}
-          >
-            <LandingPage 
-              onStartSession={() => setCurrentScreen('workspace')}
-              onOpenAuth={() => setIsAuthOpen(true)}
-              isAuthenticated={!!user}
-            />
-          </motion.div>
-        )}
+      <Suspense fallback={<PageLoader />}>
+        <AnimatePresence mode="wait">
+          {currentScreen === 'landing' && (
+            <motion.div
+              key="landing"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4 }}
+            >
+              <LandingPage 
+                onStartSession={() => setCurrentScreen('workspace')}
+                onOpenAuth={() => setIsAuthOpen(true)}
+                isAuthenticated={!!user}
+              />
+            </motion.div>
+          )}
 
-        {currentScreen === 'workspace' && (
-          <motion.div
-            key="workspace"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="h-screen w-screen"
-          >
-            <ChatInterface 
-              user={user}
-              onLogout={handleLogout}
-              onOpenDashboard={() => setIsDashboardOpen(true)}
-              onOpenAuth={() => {
-                setIsGuestBlocked(true);
-                setIsAuthOpen(true);
-              }}
-              guestToken={guestToken}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {currentScreen === 'workspace' && (
+            <motion.div
+              key="workspace"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="h-screen w-screen"
+            >
+              <ChatInterface 
+                user={user}
+                onLogout={handleLogout}
+                onOpenDashboard={() => setIsDashboardOpen(true)}
+                onOpenAuth={() => {
+                  setIsGuestBlocked(true);
+                  setIsAuthOpen(true);
+                }}
+                guestToken={guestToken}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Suspense>
 
       {/* MODAL OVERLAYS */}
-      {isAuthOpen && (
-        <AuthModal 
-          isOpen={isAuthOpen}
-          onClose={() => setIsAuthOpen(false)}
-          onLoginSuccess={handleLoginSuccess}
-          isGuestBlocked={isGuestBlocked && !user}
-        />
-      )}
+      <Suspense fallback={null}>
+        {isAuthOpen && (
+          <AuthModal 
+            isOpen={isAuthOpen}
+            onClose={() => setIsAuthOpen(false)}
+            onLoginSuccess={handleLoginSuccess}
+            isGuestBlocked={isGuestBlocked && !user}
+          />
+        )}
 
-      {isDashboardOpen && user && (
-        <UserDashboard 
-          user={user}
-          userToken={userToken}
-          onClose={() => setIsDashboardOpen(false)}
-        />
-      )}
+        {isDashboardOpen && user && (
+          <UserDashboard 
+            user={user}
+            userToken={userToken}
+            onClose={() => setIsDashboardOpen(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
